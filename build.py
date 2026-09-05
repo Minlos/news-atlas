@@ -136,7 +136,10 @@ PLACES = [
     ("Dhunche", 28.1106, 85.2983, "Asia"),
     ("Rasuwa", 28.1750, 85.3300, "Asia"),
     ("Trishuli 3A", 27.9160, 85.1450, "Asia"),
+    ("Trishuli River", 28.0500, 85.2200, "Asia"),
     ("Trishuli", 27.9070, 85.1360, "Asia"),
+    ("Nepal-Tibet border", 28.2789, 85.3775, "Asia"),
+    ("Lende Khola", 28.2750, 85.3720, "Asia"),
     ("Bidur", 27.8960, 85.1460, "Asia"),
     ("Nuwakot", 27.8700, 85.1700, "Asia"),
     ("Dhading", 27.9100, 84.8900, "Asia"),
@@ -303,7 +306,8 @@ PLACE_NAMES = sorted(PLACE_BY_NAME, key=len, reverse=True)
 
 # Finer beats coarser: site 0, town 1, district 2, country 3.
 PLACE_GRAIN = {
-    "Rasuwagadhi": 0, "Trishuli 3A": 0, "Timure": 1, "Syabrubesi": 1, "Dhunche": 1,
+    "Rasuwagadhi": 0, "Trishuli 3A": 0, "Trishuli River": 0, "Nepal-Tibet border": 0,
+    "Lende Khola": 0, "Timure": 1, "Syabrubesi": 1, "Dhunche": 1,
     "Bidur": 1, "Trishuli": 1, "Kathmandu": 1, "Rasuwa": 2, "Nuwakot": 2,
     "Dhading": 2, "Chitwan": 2, "Gorkha": 2, "Tanahu": 2, "Nepal": 3,
 }
@@ -311,7 +315,15 @@ NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
 PLACE_ALIASES = [
     (re.compile(r"rasuwagadhi|rasuwa[\s\-]?gadhi", re.I), "Rasuwagadhi"),
     (re.compile(r"trishuli[\s\-]?3a", re.I), "Trishuli 3A"),
-    (re.compile(r"nepal[\s\-–]+tibet", re.I), "Rasuwagadhi"),
+    (re.compile(r"trishuli river|river trishuli|trisuli river", re.I), "Trishuli River"),
+    (re.compile(r"lende khola|lende river", re.I), "Lende Khola"),
+    (re.compile(
+        r"border of nepal and tibet|nepal.{0,20}tibet border|tibet.{0,20}nepal border|"
+        r"china.{0,16}nepal border|nepal.{0,16}china border|"
+        r"nepal[\s\-–]+tibet(?:\s+border)?|nepal[\s\-–]+china(?:\s+border)?|"
+        r"near the border.{0,40}(?:nepal|tibet|china)",
+        re.I,
+    ), "Nepal-Tibet border"),
     (re.compile(r"(?:\b9\b|nine|10|ten)\s+days.{0,80}tunnel|tunnel.{0,80}(?:\b9\b|nine|10|ten)\s+days", re.I), "Trishuli 3A"),
 ]
 
