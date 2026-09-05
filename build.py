@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch today's world news, cluster stories, write news-map.html."""
+"""Fetch recent natural-disaster news, cluster stories, write news-map.html."""
 
 from __future__ import annotations
 
@@ -11,18 +11,21 @@ import ssl
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 TODAY = datetime.now(timezone.utc).date()
+WINDOW_DAYS = 7
 UA = "news-atlas/0.1 (personal map; +https://github.com/Minlos)"
 FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
     ("The Guardian", "https://www.theguardian.com/world/rss"),
+    ("Guardian environment", "https://www.theguardian.com/environment/rss"),
     ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
     ("NPR World", "https://feeds.npr.org/1004/rss.xml"),
     ("NYT World", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"),
     ("France 24", "https://www.france24.com/en/rss"),
     ("DW", "https://rss.dw.com/rdf/rss-en-world"),
+    ("ReliefWeb", "https://reliefweb.int/updates/rss.xml?disaster_type[]=wild-fire&disaster_type[]=flood&disaster_type[]=earthquake&disaster_type[]=tropical-cyclone&disaster_type[]=land-slide&disaster_type[]=volcano&disaster_type[]=drought&disaster_type[]=tsunami"),
 ]
 
 # City first, then country. Longer names win via sorted match.
@@ -125,6 +128,20 @@ PLACES = [
     ("Melbourne", -37.8136, 144.9631, "Asia"),
     ("Canberra", -35.2809, 149.1300, "Asia"),
     ("Wellington", -41.2865, 174.7762, "Asia"),
+    ("Kathmandu", 27.7172, 85.3240, "Asia"),
+    ("Rasuwa", 28.1750, 85.3300, "Asia"),
+    ("Nepal", 27.7172, 85.3240, "Asia"),
+    ("California", 36.7783, -119.4179, "Americas"),
+    ("Hawaii", 19.8968, -155.5828, "Americas"),
+    ("Alberta", 53.9333, -116.5769, "Americas"),
+    ("British Columbia", 53.7267, -127.6476, "Americas"),
+    ("Greece", 37.9838, 23.7275, "Europe"),
+    ("Portugal", 38.7223, -9.1393, "Europe"),
+    ("Chile", -33.4489, -70.6693, "Americas"),
+    ("Haiti", 18.5944, -72.3074, "Americas"),
+    ("El Salvador", 13.7942, -88.8965, "Americas"),
+    ("Libya", 32.8872, 13.1913, "Middle East"),
+    ("Siberia", 60.0000, 100.0000, "Asia"),
     ("United States", 38.9072, -77.0369, "Americas"),
     ("America", 38.9072, -77.0369, "Americas"),
     ("Canada", 45.4215, -75.6972, "Americas"),
@@ -185,7 +202,8 @@ CITIES = {n for n, _, _, _ in PLACES if n not in {
     "Nigeria", "Kenya", "Ethiopia", "South Africa", "Morocco", "China", "Taiwan",
     "Japan", "South Korea", "North Korea", "India", "Pakistan", "Afghanistan",
     "Bangladesh", "Myanmar", "Thailand", "Vietnam", "Indonesia", "Philippines",
-    "Australia",
+    "Australia", "Nepal", "California", "Hawaii", "Alberta", "British Columbia",
+    "Greece", "Portugal", "Chile", "Haiti", "El Salvador", "Libya", "Siberia",
 }}
 
 STOP = {
@@ -195,6 +213,49 @@ STOP = {
     "about", "have", "has", "will", "been", "were", "this", "that", "with", "from",
     "world", "news", "video", "live", "update", "updates", "could", "would", "over",
 }
+
+HAZARDS = [
+    ("wildfire", re.compile(
+        r"\bwildfires?\b|\bbushfires?\b|\bforest fires?\b|\bwild fire\b|"
+        r"\bлесн\w{0,10}\s+пожар\w*|\bпожар\w*\s+в\s+лес\w*", re.I)),
+    ("flood", re.compile(
+        r"\bfloods?\b|\bflooding\b|\bflooded\b|\bflash floods?\b|"
+        r"\bнаводнен\w*|\bпаводок\b", re.I)),
+    ("earthquake", re.compile(
+        r"\bearthquakes?\b|\baftershocks?\b|\bземлетрясен\w*|"
+        r"\b(?<!earth)quakes?\b", re.I)),
+    ("cyclone", re.compile(
+        r"\bhurricanes?\b|\btyphoons?\b|\bcyclones?\b|\btropical storms?\b|"
+        r"\bураган\w*|\bтайфун\w*", re.I)),
+    ("tornado", re.compile(r"\btornadoes?\b|\btwisters?\b", re.I)),
+    ("volcano", re.compile(r"\bvolcanos?\b|\bvolcanoes?\b|\beruptions?\b|\bизвержен\w*", re.I)),
+    ("landslide", re.compile(r"\blandslides?\b|\bmudslides?\b|\bоползн\w*", re.I)),
+    ("tsunami", re.compile(r"\btsunamis?\b|\bцунами\b", re.I)),
+    ("drought", re.compile(r"\bdroughts?\b|\bзасух\w*", re.I)),
+    ("heatwave", re.compile(r"\bheatwaves?\b|\bheat waves?\b|\bжара\b", re.I)),
+    ("avalanche", re.compile(r"\bavalanches?\b|\bлавин\w*", re.I)),
+]
+
+HAZARD_COLOR = {
+    "wildfire": "#d4784a",
+    "flood": "#6a9ec4",
+    "earthquake": "#c4898a",
+    "cyclone": "#8aa0c4",
+    "tornado": "#9b8ac4",
+    "volcano": "#c45a3a",
+    "landslide": "#9b8a6a",
+    "tsunami": "#4a7a8c",
+    "drought": "#d4b483",
+    "heatwave": "#d49a5a",
+    "avalanche": "#c4d0d8",
+}
+
+
+def classify_hazard(text: str) -> str | None:
+    for name, rx in HAZARDS:
+        if rx.search(text or ""):
+            return name
+    return None
 
 PLACE_BY_NAME = {n.lower(): (n, lat, lng, region) for n, lat, lng, region in PLACES}
 PLACE_NAMES = sorted(PLACE_BY_NAME, key=len, reverse=True)
@@ -317,9 +378,12 @@ def cluster(articles: list[dict]) -> list[list[int]]:
                 and articles[j]["place"]
                 and articles[i]["place"]["name"] == articles[j]["place"]["name"]
             )
+            same_hazard = articles[i].get("hazard") and articles[i]["hazard"] == articles[j].get("hazard")
             jac = jaccard(toks[i], toks[j])
             overlap = toks[i] & toks[j]
-            if jac >= 0.32 or (same_place and jac >= 0.18) or (len(overlap) >= 3 and jac >= 0.22):
+            if (same_hazard and same_place) or (same_hazard and jac >= 0.28) or jac >= 0.4 or (
+                same_place and jac >= 0.18
+            ) or (len(overlap) >= 3 and jac >= 0.22):
                 union(i, j)
     groups = defaultdict(list)
     for i in range(n):
@@ -337,7 +401,7 @@ HTML = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>News atlas — stories from TODAY</title>
+  <title>Disaster atlas — wildfires, floods, quakes</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     :root {
@@ -360,6 +424,8 @@ HTML = """<!DOCTYPE html>
     }
     h1 { font-size: 1.28rem; font-weight: 600; margin: 0 2px 2px; }
     .sub { color: var(--muted); font-size: .8rem; line-height: 1.5; margin: 0 0 14px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; font-size: .75rem; color: var(--muted); }
+    .swatch { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
     label { display: block; font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
       color: var(--muted); margin: 11px 0 5px; }
     select, button {
@@ -391,68 +457,85 @@ HTML = """<!DOCTYPE html>
 <body>
   <div id="map"></div>
   <aside class="panel">
-    <h1>News atlas</h1>
-    <p class="sub"><span class="count" id="count"></span> stories from <span class="count">TODAY</span>, clustered from world wires. Pins are story groups, not every headline.</p>
+    <h1>Disaster atlas</h1>
+    <p class="sub"><span class="count" id="count"></span> natural-disaster stories in the last 7 days (forest fires, floods, quakes, storms). Pins are story groups.</p>
+    <label for="hazard">Hazard</label>
+    <select id="hazard"></select>
     <label for="region">Region</label>
     <select id="region"></select>
     <label for="place">Place</label>
     <select id="place"></select>
     <div class="row">
       <button type="button" id="world">World</button>
-      <button type="button" id="europe">Europe</button>
-      <button type="button" id="me">Middle East</button>
+      <button type="button" id="asia">Asia</button>
+      <button type="button" id="americas">Americas</button>
     </div>
+    <div class="legend" id="legend"></div>
   </aside>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const TODAY = __TODAY__;
     const CLUSTERS = __CLUSTERS__;
+    const HAZARD_COLOR = __HAZARD_COLOR__;
     const map = L.map("map", { zoomControl: true, minZoom: 2 }).setView([20, 15], 2);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-      attribution: "Tiles &copy; Esri · news from BBC, Guardian, Al Jazeera, NPR, NYT, France 24, DW",
+      attribution: "Tiles &copy; Esri · wires + ReliefWeb",
       maxZoom: 19
     }).addTo(map);
     const layer = L.layerGroup().addTo(map);
+    const hazards = ["all"].concat([...new Set(CLUSTERS.map(c => c.hazard))].sort());
+    const hazardSel = document.getElementById("hazard");
+    hazardSel.innerHTML = hazards.map(h => '<option value="' + h + '">' + (h === "all" ? "All hazards" : h) + "</option>").join("");
     const regions = ["all"].concat([...new Set(CLUSTERS.map(c => c.region))].sort());
     const regionSel = document.getElementById("region");
     regionSel.innerHTML = regions.map(r => '<option value="' + r + '">' + (r === "all" ? "All regions" : r) + "</option>").join("");
     const placeSel = document.getElementById("place");
-    function placesFor(region) {
-      const names = [...new Set(CLUSTERS.filter(c => region === "all" || c.region === region).map(c => c.place))].sort();
-      placeSel.innerHTML = '<option value="all">All places</option>' + names.map(n => '<option>' + n + "</option>").join("");
-    }
-    function render() {
-      layer.clearLayers();
-      const region = regionSel.value;
-      const place = placeSel.value;
-      const shown = CLUSTERS.filter(c => {
+    document.getElementById("legend").innerHTML = Object.keys(HAZARD_COLOR).filter(h => CLUSTERS.some(c => c.hazard === h)).map(h =>
+      '<span><i class="swatch" style="background:' + HAZARD_COLOR[h] + '"></i>' + h + "</span>"
+    ).join("");
+    function filtered() {
+      const hazard = hazardSel.value, region = regionSel.value, place = placeSel.value;
+      return CLUSTERS.filter(c => {
+        if (hazard !== "all" && c.hazard !== hazard) return false;
         if (region !== "all" && c.region !== region) return false;
         if (place !== "all" && c.place !== place) return false;
         return true;
       });
+    }
+    function placesFor() {
+      const names = [...new Set(filtered().map(c => c.place))].sort();
+      const keep = placeSel.value;
+      placeSel.innerHTML = '<option value="all">All places</option>' + names.map(n => '<option>' + n + "</option>").join("");
+      if (names.indexOf(keep) !== -1) placeSel.value = keep;
+    }
+    function render() {
+      layer.clearLayers();
+      const shown = filtered();
       document.getElementById("count").textContent = shown.length;
       shown.forEach(c => {
         const r = Math.min(16, 7 + c.articles.length * 1.6);
         const m = L.circleMarker([c.lat, c.lng], {
-          radius: r, color: "#0b0c10", weight: 1, fillColor: "#d4b483", fillOpacity: 0.92
+          radius: r, color: "#0b0c10", weight: 1,
+          fillColor: HAZARD_COLOR[c.hazard] || "#d4b483", fillOpacity: 0.92
         });
         const items = c.articles.map(a =>
           '<p class="popup-item"><a href="' + a.link + '" target="_blank" rel="noopener">' + a.title +
-          '</a><br><span class="popup-src">' + a.source + "</span></p>"
+          '</a><br><span class="popup-src">' + a.source + (a.today ? " · today" : "") + "</span></p>"
         ).join("");
         m.bindPopup(
-          '<p class="popup-kicker">' + c.place + " · " + c.articles.length + " headline" + (c.articles.length > 1 ? "s" : "") + "</p>" +
+          '<p class="popup-kicker">' + c.hazard + " · " + c.place + " · " + c.articles.length + " headline" + (c.articles.length > 1 ? "s" : "") + "</p>" +
           '<p class="popup-title">' + c.title + "</p>" + items
         );
         m.addTo(layer);
       });
     }
-    regionSel.addEventListener("change", function () { placesFor(regionSel.value); render(); });
+    hazardSel.addEventListener("change", function () { placesFor(); render(); });
+    regionSel.addEventListener("change", function () { placesFor(); render(); });
     placeSel.addEventListener("change", render);
     document.getElementById("world").onclick = function () { map.setView([20, 15], 2); };
-    document.getElementById("europe").onclick = function () { map.setView([50, 10], 4); };
-    document.getElementById("me").onclick = function () { map.setView([29, 42], 4); };
-    placesFor("all");
+    document.getElementById("asia").onclick = function () { map.setView([28, 90], 4); };
+    document.getElementById("americas").onclick = function () { map.setView([15, -80], 3); };
+    placesFor();
     render();
   </script>
 </body>
@@ -472,17 +555,23 @@ def main() -> None:
         print(f"  {len(got)} items")
         articles.extend(got)
 
-    today_items = []
+    cutoff = TODAY - timedelta(days=WINDOW_DAYS)
+    disasters = []
     for a in articles:
-        if a["when"] and a["when"].date() == TODAY:
-            today_items.append(a)
-    print(f"dated today: {len(today_items)} / {len(articles)}")
-    if len(today_items) < 8:
-        print("thin today slice; keeping calendar-day filter anyway")
+        if a["when"] and a["when"].date() < cutoff:
+            continue
+        text = a["title"] + " " + a["summary"]
+        hazard = classify_hazard(text)
+        if not hazard:
+            continue
+        a["hazard"] = hazard
+        a["today"] = bool(a["when"] and a["when"].date() == TODAY)
+        disasters.append(a)
+    print(f"disasters in {WINDOW_DAYS}d: {len(disasters)} (today {sum(1 for a in disasters if a['today'])})")
 
     located = []
     skipped = 0
-    for a in today_items:
+    for a in disasters:
         place = locate(a["title"] + " " + a["summary"])
         if not place:
             skipped += 1
@@ -490,6 +579,7 @@ def main() -> None:
         a["place"] = place
         located.append(a)
     print(f"located {len(located)}, no place {skipped}")
+    print("hazards", Counter(a["hazard"] for a in located))
 
     groups = cluster(located)
     clusters = []
@@ -505,13 +595,15 @@ def main() -> None:
             if key in seen:
                 continue
             seen.add(key)
-            uniq.append({"title": m["title"], "link": m["link"], "source": m["source"]})
+            uniq.append({"title": m["title"], "link": m["link"], "source": m["source"], "today": m["today"]})
+        hazards = Counter(m["hazard"] for m in members)
         clusters.append({
             "title": cluster_title(members),
             "place": place["name"],
             "lat": place["lat"],
             "lng": place["lng"],
             "region": place["region"],
+            "hazard": hazards.most_common(1)[0][0],
             "articles": uniq,
         })
     clusters.sort(key=lambda c: (-len(c["articles"]), c["place"]))
@@ -519,6 +611,7 @@ def main() -> None:
 
     out = HTML.replace("__TODAY__", json.dumps(TODAY.isoformat()))
     out = out.replace("__CLUSTERS__", json.dumps(clusters, ensure_ascii=False))
+    out = out.replace("__HAZARD_COLOR__", json.dumps(HAZARD_COLOR))
     path = "/Users/minlos/Downloads/news-atlas/news-map.html"
     with open(path, "w", encoding="utf-8") as f:
         f.write(out)
