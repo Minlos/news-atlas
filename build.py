@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch recent natural-disaster news, cluster stories, write news-map.html."""
+"""Fetch recent disaster news (natural + technogenic), cluster, write news-map.html."""
 
 from __future__ import annotations
 
@@ -32,9 +32,11 @@ FEEDS = [
     ("The Hindu", "https://www.thehindu.com/news/international/feeder/default.rss"),
     ("Kathmandu Post", "https://kathmandupost.com/rss"),
     ("Floodlist", "https://floodlist.com/feed"),
-    ("ReliefWeb", "https://reliefweb.int/updates/rss.xml?disaster_type[]=wild-fire&disaster_type[]=flood&disaster_type[]=earthquake&disaster_type[]=tropical-cyclone&disaster_type[]=land-slide&disaster_type[]=volcano&disaster_type[]=tsunami"),
+    ("ReliefWeb", "https://reliefweb.int/updates/rss.xml?disaster_type[]=wild-fire&disaster_type[]=flood&disaster_type[]=earthquake&disaster_type[]=tropical-cyclone&disaster_type[]=land-slide&disaster_type[]=volcano&disaster_type[]=tsunami&disaster_type[]=technological-disaster"),
     ("Google News", f"https://news.google.com/rss/search?q=flood%20OR%20wildfire%20OR%20earthquake%20OR%20hurricane%20OR%20typhoon%20OR%20landslide%20after:{AFTER}&hl=en-US&gl=US&ceid=US:en"),
     ("Google wildfires", f"https://news.google.com/rss/search?q=wildfire%20OR%20bushfire%20OR%20%22forest%20fire%22%20OR%20%22fires%20rage%22%20OR%20%22acres%20burned%22%20after:{AFTER}&hl=en-US&gl=US&ceid=US:en"),
+    ("Google technogenic", "https://news.google.com/rss/search?q=chemical%20spill%20OR%20%22oil%20spill%22%20OR%20%22gas%20explosion%22%20OR%20%22factory%20explosion%22%20OR%20%22mine%20collapse%22%20OR%20%22mining%20accident%22%20OR%20%22industrial%20accident%22%20OR%20%22refinery%20fire%22%20OR%20%22pipeline%20explosion%22%20when:7d&hl=en-US&gl=US&ceid=US:en"),
+    ("Google industrial", "https://news.google.com/rss/search?q=%22mine%20collapse%22%20OR%20%22mining%20accident%22%20OR%20%22gas%20explosion%22%20OR%20%22industrial%20accident%22%20OR%20%22refinery%20fire%22%20OR%20%22pipeline%20explosion%22%20when:7d&hl=en-US&gl=US&ceid=US:en"),
 ]
 
 # City first, then country. Longer names win via sorted match.
@@ -184,6 +186,49 @@ PLACES = [
     ("Nebraska", 41.4925, -99.9018, "Americas"),
     ("Colorado", 39.5501, -105.7821, "Americas"),
     ("Arkansas", 35.2010, -91.8318, "Americas"),
+    ("Ohio", 40.4173, -82.9071, "Americas"),
+    ("Illinois", 40.6331, -89.3985, "Americas"),
+    ("Louisiana", 30.9843, -91.9623, "Americas"),
+    ("Iowa", 41.8780, -93.0977, "Americas"),
+    ("North Dakota", 47.5515, -101.0020, "Americas"),
+    ("Missouri", 37.9643, -91.8318, "Americas"),
+    ("Michigan", 44.3148, -85.6024, "Americas"),
+    ("Pennsylvania", 41.2033, -77.1945, "Americas"),
+    ("Alabama", 32.3182, -86.9023, "Americas"),
+    ("Florida", 27.6648, -81.5158, "Americas"),
+    ("Georgia", 32.1656, -82.9001, "Americas"),
+    ("Nevada", 38.8026, -116.4194, "Americas"),
+    ("Arizona", 34.0489, -111.0937, "Americas"),
+    ("Wyoming", 43.0760, -107.2903, "Americas"),
+    ("Alaska", 64.2008, -152.4783, "Americas"),
+    ("South Carolina", 33.8361, -81.1637, "Americas"),
+    ("Tennessee", 35.5175, -86.5804, "Americas"),
+    ("Kentucky", 37.8393, -84.2700, "Americas"),
+    ("Minnesota", 46.7296, -94.6859, "Americas"),
+    ("Wisconsin", 43.7844, -88.7879, "Americas"),
+    ("Oklahoma", 35.0078, -97.0929, "Americas"),
+    ("Kansas", 39.0119, -98.4842, "Americas"),
+    ("Indiana", 40.2672, -86.1349, "Americas"),
+    ("Mississippi", 32.3547, -89.3985, "Americas"),
+    ("West Virginia", 38.5976, -80.4549, "Americas"),
+    ("Quebec", 46.8139, -71.2080, "Americas"),
+    ("Houston", 29.7604, -95.3698, "Americas"),
+    ("Chicago", 41.8781, -87.6298, "Americas"),
+    ("Detroit", 42.3314, -83.0458, "Americas"),
+    ("Seattle", 47.6062, -122.3321, "Americas"),
+    ("Cleveland", 41.4993, -81.6944, "Americas"),
+    ("Pittsburgh", 40.4406, -79.9959, "Americas"),
+    ("Charleston", 32.7765, -79.9311, "Americas"),
+    ("Atlanta", 33.7490, -84.3880, "Americas"),
+    ("Dallas", 32.7767, -96.7970, "Americas"),
+    ("Miami", 25.7617, -80.1918, "Americas"),
+    ("Philadelphia", 39.9526, -75.1652, "Americas"),
+    ("Denver", 39.7392, -104.9903, "Americas"),
+    ("Phoenix", 33.4484, -112.0740, "Americas"),
+    ("El Paso", 31.7619, -106.4850, "Americas"),
+    ("Port Harcourt", 4.8156, 7.0498, "Africa"),
+    ("DR Congo", -4.0383, 21.7587, "Africa"),
+    ("Washington State", 47.7511, -120.7401, "Americas"),
     ("Yosemite", 37.8651, -119.5383, "Americas"),
     ("Mariposa", 37.4849, -119.9663, "Americas"),
     ("Algeria", 36.7538, 3.0588, "Africa"),
@@ -252,6 +297,13 @@ CITIES = {n for n, _, _, _ in PLACES if n not in {
     "Australia", "Nepal", "California", "Hawaii", "Alberta", "British Columbia",
     "Nuwakot", "Dhading", "Chitwan", "Gorkha", "Tanahu", "Rasuwa",
     "Greece", "Portugal", "Chile", "Haiti", "El Salvador", "Libya", "Siberia",
+    "Oregon", "Montana", "Idaho", "Yukon", "Saskatchewan", "Texas", "Nebraska",
+    "Colorado", "Arkansas", "Ohio", "Illinois", "Louisiana", "Iowa", "North Dakota",
+    "Missouri", "Michigan", "Pennsylvania", "Alabama", "Florida", "Georgia",
+    "Nevada", "Arizona", "Wyoming", "Alaska", "South Carolina", "Tennessee",
+    "Kentucky", "Minnesota", "Wisconsin", "Oklahoma", "Kansas", "Indiana",
+    "Mississippi", "West Virginia", "Quebec", "Amazon", "Algeria", "DR Congo",
+    "Washington State",
 }}
 
 STOP = {
@@ -285,6 +337,25 @@ HAZARDS = [
     ("landslide", re.compile(r"\blandslides?\b|\bmudslides?\b|\bоползн\w*", re.I)),
     ("tsunami", re.compile(r"\btsunamis?\b|\bцунами\b", re.I)),
     ("avalanche", re.compile(r"\bavalanches?\b|\bлавин\w*", re.I)),
+    ("technogenic", re.compile(
+        r"\bindustrial accidents?\b|\btechnogenic\b|\bтехногенн\w*|"
+        r"\bindustrial (?:explosions?|fires?|blasts?|disasters?)\b|"
+        r"\bchemical spills?\b|\btoxic (?:spills?|leaks?|clouds?|gas)\b|"
+        r"\boil spills?\b|\bgas (?:leaks?|explosions?|blasts?)\b|"
+        r"\bpipeline (?:explosions?|blasts?|leaks?|ruptures?)\b|"
+        r"\brefinery (?:fires?|explosions?|blasts?)\b|"
+        r"\bfactory (?:explosions?|blasts?|fires?)\b|"
+        r"\b(?:plant|warehouse) (?:explosions?|blasts?)\b|"
+        r"\bexplosions? at (?:a |the )?(?:plant|factory|refinery|mine|warehouse|chemical)\b|"
+        r"\bmine (?:collapses?|accidents?|explosions?|blasts?)\b|"
+        r"\b(?:coal )?mining accidents?\b|"
+        r"\bnuclear (?:accidents?|leaks?|meltdowns?|disasters?)\b|"
+        r"\bradiation leaks?\b|\bразлив(?:ы|е|а)?\s+нефти\b|"
+        r"\b(?:train|freight|rail(?:way|road)?) derailments?\b|"
+        r"\btrains? derail(?:s|ed|ing)?\b|"
+        r"\bhazmat\b|\bchlorine leaks?\b|\bammonia leaks?\b|"
+        r"\bdam (?:bursts?|failures?|breaches?|collapses?)\b",
+        re.I)),
 ]
 
 HAZARD_COLOR = {
@@ -297,6 +368,7 @@ HAZARD_COLOR = {
     "landslide": "#9b8a6a",
     "tsunami": "#4a7a8c",
     "avalanche": "#c4d0d8",
+    "technogenic": "#c4a85a",
 }
 
 REJECT = re.compile(
@@ -309,7 +381,21 @@ REJECT = re.compile(
     r"\bwhat we know about the link\b|\bclimate crisis\b|"
     r"\bliability\b|\bPG&E\b|\bState Farm\b|"
     r"\bwildfire (?:bill|reform|deal|costs?|plan|claims?)\b|"
-    r"\blegislat(?:e|ure|ive)\b",
+    r"\blegislat(?:e|ure|ive)\b|"
+    r"\bnuclear (?:deal|talks?|weapon|warheads?|enrichment|proliferation|summit)\b|"
+    r"\bchemical weapons?\b|"
+    r"\bmissiles?\b|\bbombing\b|\bshelling\b|"
+    r"\boil prices?\b",
+    re.I,
+)
+
+TECH_STALE = re.compile(
+    r"\bten years later\b|\byears later\b|"
+    r"\bguidance for\b|\bschizophrenia\b|"
+    r"\bmarket size\b|\bcooking oil\b|"
+    r"\b(?:18-wheeler|tractor-trailer)\b.{0,40}\boil spill|"
+    r"\boil spill.{0,40}\b(?:highway|expressway|interstate|lanes?)\b|"
+    r"\b(?:highway|expressway|interstate)\b.{0,40}\boil spill",
     re.I,
 )
 
@@ -336,7 +422,10 @@ def is_happening(title: str, summary: str) -> bool:
     text = f"{title} {summary}"
     if REJECT.search(text):
         return False
-    if classify_hazard(text):
+    hazard = classify_hazard(text)
+    if hazard == "technogenic" and TECH_STALE.search(title):
+        return False
+    if hazard:
         return True
     return bool(HAPPENING.search(text))
 
@@ -355,6 +444,12 @@ PLACE_GRAIN = {
     "Amazon": 2, "Oregon": 2, "Montana": 2, "Idaho": 2, "Yukon": 2, "Saskatchewan": 2,
     "Texas": 2, "Nebraska": 2, "Colorado": 2, "Arkansas": 2, "Yosemite": 1, "Mariposa": 1,
     "Algeria": 2,
+    "Ohio": 2, "Illinois": 2, "Louisiana": 2, "Iowa": 2, "North Dakota": 2,
+    "Missouri": 2, "Michigan": 2, "Pennsylvania": 2, "Alabama": 2, "Florida": 2,
+    "Georgia": 2, "Nevada": 2, "Arizona": 2, "Wyoming": 2, "Alaska": 2,
+    "South Carolina": 2, "Tennessee": 2, "Kentucky": 2, "Minnesota": 2, "Wisconsin": 2,
+    "Oklahoma": 2, "Kansas": 2, "Indiana": 2, "Mississippi": 2, "West Virginia": 2,
+    "Quebec": 2, "DR Congo": 2, "Washington State": 2,
 }
 NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
 
@@ -401,6 +496,20 @@ PLACE_ALIASES = [
         re.I,
     ), "Nepal-Tibet border"),
     (re.compile(r"(?:\b9\b|nine|10|ten)\s+days.{0,80}tunnel|tunnel.{0,80}(?:\b9\b|nine|10|ten)\s+days", re.I), "Trishuli 3A"),
+    (re.compile(r"sound transit", re.I), "Seattle"),
+    (re.compile(r"garden grove", re.I), "Los Angeles"),
+    (re.compile(r"east palestine", re.I), "Ohio"),
+    (re.compile(r"yellowstone river", re.I), "Montana"),
+    (re.compile(r"fraser river", re.I), "British Columbia"),
+    (re.compile(r"\bdr congo\b|\bdrc\b|democratic republic of (?:the )?congo", re.I), "DR Congo"),
+    (re.compile(r"\bbille\b|\brivers community\b", re.I), "Port Harcourt"),
+    (re.compile(r"twin falls", re.I), "Idaho"),
+    (re.compile(r"fort smith", re.I), "Arkansas"),
+    (re.compile(r"slidell", re.I), "Louisiana"),
+    (re.compile(r"loudon county", re.I), "Tennessee"),
+    (re.compile(r"anclote", re.I), "Florida"),
+    (re.compile(r"washington state|\blongview\b", re.I), "Washington State"),
+    (re.compile(r"el paso", re.I), "El Paso"),
 ]
 
 
@@ -488,7 +597,7 @@ def article_text(url: str) -> str:
     return re.sub(r"\s+", " ", raw).strip()[:8000]
 
 
-def locate_hits(text: str) -> list[dict]:
+def locate_hits(text: str, allow_capitals: bool = False) -> list[dict]:
     blob = " " + (text or "") + " "
     blob = re.sub(r"\bin Kathmandu\b", " ", blob, flags=re.I)
     lower = blob.lower()
@@ -499,7 +608,7 @@ def locate_hits(text: str) -> list[dict]:
     for name in PLACE_NAMES:
         if re.search(r"[^a-z0-9]" + re.escape(name) + r"[^a-z0-9]", lower):
             canon, lat, lng, region = PLACE_BY_NAME[name]
-            if canon in CAPITALS:
+            if canon in CAPITALS and not allow_capitals:
                 continue
             grain = PLACE_GRAIN.get(canon, 1 if canon in CITIES else 3)
             if grain >= 3:
@@ -517,16 +626,16 @@ def locate_hits(text: str) -> list[dict]:
     return places
 
 
-def locate(text: str) -> dict | None:
-    hits = locate_hits(text)
+def locate(text: str, allow_capitals: bool = False) -> dict | None:
+    hits = locate_hits(text, allow_capitals=allow_capitals)
     return hits[0] if hits else None
 
 
-def locate_article_places(title: str, summary: str, body: str) -> list[dict]:
-    title_hits = locate_hits(title)
+def locate_article_places(title: str, summary: str, body: str, allow_capitals: bool = False) -> list[dict]:
+    title_hits = locate_hits(title, allow_capitals=allow_capitals)
     lead = f"{summary} {body}"[:1800]
-    lead_hits = locate_hits(lead)
-    body_hits = locate_hits(f"{title} {summary} {body}")
+    lead_hits = locate_hits(lead, allow_capitals=allow_capitals)
+    body_hits = locate_hits(f"{title} {summary} {body}", allow_capitals=allow_capitals)
     if title_hits:
         extra = [p for p in lead_hits + body_hits if PLACE_GRAIN.get(p["name"], 3) <= 2]
         merged = {p["name"]: p for p in title_hits + extra}
@@ -541,6 +650,8 @@ CAPITALS = {
     "Delhi", "Beijing", "Jakarta", "Manila", "Tokyo", "Islamabad", "Cairo", "Riyadh",
     "Ankara", "Rome", "Madrid", "Brussels",
 }
+# US towns share these names; do not pin industrial accidents on the European city.
+AMBIGUOUS_CAPITALS = {"Rome", "Paris", "Moscow", "London"}
 
 
 def place_record(name: str) -> dict:
@@ -587,6 +698,8 @@ def refine_place(article: dict, place: dict | None) -> dict | None:
     if is_coarse(place) and article.get("hazard") == "cyclone" and re.search(r"philippines|luzon|monsoon", text):
         return place_record("Luzon")
     if is_coarse(place):
+        if article.get("hazard") == "technogenic" and name in CAPITALS:
+            return place
         return None
     return place
 
@@ -723,7 +836,7 @@ HTML = """<!DOCTYPE html>
   <div id="map"></div>
   <aside class="panel">
     <h1>Disaster atlas</h1>
-    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms. Last __WINDOW__ days. Politics and explainers stay off.</p>
+    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms, industrial accidents. Last __WINDOW__ days. Politics and explainers stay off.</p>
     <label for="hazard">Hazard</label>
     <select id="hazard"></select>
     <label for="region">Region</label>
@@ -843,11 +956,15 @@ def main() -> None:
     skipped = 0
     for a in disasters:
         extra = article_text(a["link"])
-        places = locate_article_places(a["title"], a["summary"], extra)
+        tech = a.get("hazard") == "technogenic"
+        places = locate_article_places(a["title"], a["summary"], extra, allow_capitals=tech)
         if not places:
-            one = refine_place(a, locate(a["title"] + " " + a["summary"]))
+            one = refine_place(a, locate(a["title"] + " " + a["summary"], allow_capitals=tech))
             places = [one] if one else []
-        places = [p for p in places if not is_coarse(p)]
+        places = [
+            p for p in places
+            if not is_coarse(p) or (tech and p["name"] in CAPITALS and p["name"] not in AMBIGUOUS_CAPITALS)
+        ]
         if not places:
             skipped += 1
             print(f"  no place | {a['title'][:70]}")
@@ -861,12 +978,12 @@ def main() -> None:
     print(f"located {len(located)}, no place {skipped}")
     print("hazards", Counter(a["hazard"] for a in located))
 
-    by_place: dict[str, list] = defaultdict(list)
+    by_place: dict[tuple[str, str], list] = defaultdict(list)
     for a in located:
         for p in a["places"]:
-            by_place[p["name"]].append((a, p))
+            by_place[(p["name"], a["hazard"])].append((a, p))
     clusters = []
-    for name, pairs in by_place.items():
+    for (_name, _hazard), pairs in by_place.items():
         members = [a for a, _ in pairs]
         place = pairs[0][1]
         seen = set()
