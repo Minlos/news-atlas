@@ -318,6 +318,7 @@ NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
 PLACE_ALIASES = [
     (re.compile(r"rasuwagadhi|rasuwa[\s\-]?gadhi", re.I), "Rasuwagadhi"),
     (re.compile(r"trishuli[\s\-]?3a", re.I), "Trishuli 3A"),
+    (re.compile(r"trishuli hydropower|hydropower.{0,40}trishuli|trishuli.{0,40}hydropower", re.I), "Trishuli 3A"),
     (re.compile(r"trishuli river|river trishuli|trisuli river", re.I), "Trishuli River"),
     (re.compile(r"lende khola|lende river", re.I), "Lende Khola"),
     (re.compile(
@@ -411,37 +412,50 @@ def article_text(url: str) -> str:
     return re.sub(r"\s+", " ", raw).strip()[:8000]
 
 
-def locate(text: str) -> dict | None:
+def locate_hits(text: str) -> list[dict]:
     blob = " " + (text or "") + " "
     blob = re.sub(r"\bin Kathmandu\b", " ", blob, flags=re.I)
     lower = blob.lower()
     for rx, canon in PLACE_ALIASES:
         if rx.search(lower):
             lower += " " + canon.lower() + " "
-    hits = []
+    found = {}
     for name in PLACE_NAMES:
         if re.search(r"[^a-z0-9]" + re.escape(name) + r"[^a-z0-9]", lower):
             canon, lat, lng, region = PLACE_BY_NAME[name]
-            pos = lower.find(name)
+            if canon in CAPITALS:
+                continue
             grain = PLACE_GRAIN.get(canon, 1 if canon in CITIES else 3)
-            hits.append((grain, pos, -len(name), canon, lat, lng, region))
-    if not hits:
-        return None
-    hits.sort()
-    _, _, _, canon, lat, lng, region = hits[0]
-    return {"name": canon, "lat": lat, "lng": lng, "region": region}
+            if grain >= 3:
+                continue
+            pos = lower.find(name)
+            prev = found.get(canon)
+            if prev is None or (grain, pos, -len(name)) < prev[0]:
+                found[canon] = ((grain, pos, -len(name)), {"name": canon, "lat": lat, "lng": lng, "region": region})
+    places = [p for _, p in found.values()]
+    names = [p["name"] for p in places]
+    places = [p for p in places if not any(q != p["name"] and q.startswith(p["name"]) for q in names)]
+    places.sort(key=lambda p: (PLACE_GRAIN.get(p["name"], 3), p["name"]))
+    return places
 
 
-def locate_article(title: str, summary: str, body: str) -> dict | None:
-    best = None
-    for chunk in (title, f"{title} {summary}", f"{title} {summary} {body}"):
-        hit = locate(chunk)
-        if not hit:
-            continue
-        best = hit
-        if PLACE_GRAIN.get(hit["name"], 3) <= 2:
-            return hit
-    return best
+def locate(text: str) -> dict | None:
+    hits = locate_hits(text)
+    return hits[0] if hits else None
+
+
+def locate_article_places(title: str, summary: str, body: str) -> list[dict]:
+    title_hits = locate_hits(title)
+    lead = f"{summary} {body}"[:1800]
+    lead_hits = locate_hits(lead)
+    body_hits = locate_hits(f"{title} {summary} {body}")
+    if title_hits:
+        extra = [p for p in lead_hits if PLACE_GRAIN.get(p["name"], 3) == 0]
+        merged = {p["name"]: p for p in title_hits + extra}
+        return list(merged.values())[:4]
+    merged = {p["name"]: p for p in lead_hits + body_hits}
+    ranked = sorted(merged.values(), key=lambda p: PLACE_GRAIN.get(p["name"], 3))
+    return ranked[:3]
 
 
 CAPITALS = {
@@ -728,25 +742,30 @@ def main() -> None:
     skipped = 0
     for a in disasters:
         extra = article_text(a["link"])
-        place = locate_article(a["title"], a["summary"], extra)
-        place = refine_place(a, place)
-        if not place:
+        places = locate_article_places(a["title"], a["summary"], extra)
+        if not places:
+            one = refine_place(a, locate(a["title"] + " " + a["summary"]))
+            places = [one] if one else []
+        places = [p for p in places if not is_coarse(p)]
+        if not places:
             skipped += 1
             print(f"  no place | {a['title'][:70]}")
             continue
-        a["place"] = place
+        a["places"] = places
+        a["place"] = places[0]
         located.append(a)
-        print(f"  {place['name']:16} | {a['title'][:62]}")
+        print(f"  {', '.join(p['name'] for p in places):28} | {a['title'][:52]}")
     print(f"located {len(located)}, no place {skipped}")
     print("hazards", Counter(a["hazard"] for a in located))
 
-    groups = cluster(located)
+    by_place: dict[str, list] = defaultdict(list)
+    for a in located:
+        for p in a["places"]:
+            by_place[p["name"]].append((a, p))
     clusters = []
-    for idxs in groups:
-        members = [located[i] for i in idxs]
-        places = Counter(m["place"]["name"] for m in members)
-        place_name = places.most_common(1)[0][0]
-        place = next(m["place"] for m in members if m["place"]["name"] == place_name)
+    for name, pairs in by_place.items():
+        members = [a for a, _ in pairs]
+        place = pairs[0][1]
         seen = set()
         uniq = []
         for m in members:
