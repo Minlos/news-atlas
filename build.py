@@ -146,6 +146,14 @@ PLACES = [
     ("Chitwan", 27.5291, 84.3542, "Asia"),
     ("Gorkha", 28.0460, 84.6200, "Asia"),
     ("Tanahu", 27.9440, 84.2500, "Asia"),
+    ("Chilime", 28.2090, 85.3130, "Asia"),
+    ("Mailung", 28.0800, 85.2200, "Asia"),
+    ("Betrawati", 27.9700, 85.1800, "Asia"),
+    ("Langtang", 28.2150, 85.5650, "Asia"),
+    ("Barhabise", 27.7900, 85.8950, "Asia"),
+    ("Sindhupalchok", 27.8000, 85.7000, "Asia"),
+    ("Bhotekoshi", 27.8100, 85.8900, "Asia"),
+    ("Kerung", 28.3900, 85.3250, "Asia"),
     ("Nepal", 28.3949, 84.1240, "Asia"),
     ("California", 36.7783, -119.4179, "Americas"),
     ("Hawaii", 19.8968, -155.5828, "Americas"),
@@ -309,9 +317,11 @@ PLACE_NAMES = sorted(PLACE_BY_NAME, key=len, reverse=True)
 # Finer beats coarser: site 0, town 1, district 2, country 3.
 PLACE_GRAIN = {
     "Rasuwagadhi": 0, "Trishuli 3A": 0, "Trishuli River": 0, "Nepal-Tibet border": 0,
-    "Lende Khola": 0, "Timure": 1, "Syabrubesi": 1, "Dhunche": 1,
-    "Bidur": 1, "Trishuli": 1, "Kathmandu": 1, "Rasuwa": 2, "Nuwakot": 2,
-    "Dhading": 2, "Chitwan": 2, "Gorkha": 2, "Tanahu": 2, "Nepal": 3,
+    "Lende Khola": 0, "Bhotekoshi": 0, "Chilime": 0, "Mailung": 0,
+    "Timure": 1, "Syabrubesi": 1, "Dhunche": 1, "Betrawati": 1, "Barhabise": 1,
+    "Langtang": 1, "Kerung": 1, "Bidur": 1, "Trishuli": 1, "Kathmandu": 1,
+    "Rasuwa": 2, "Nuwakot": 2, "Dhading": 2, "Chitwan": 2, "Gorkha": 2,
+    "Tanahu": 2, "Sindhupalchok": 2, "Nepal": 3,
     "Sumatra": 2, "Luzon": 2, "Hawaii": 2, "California": 2,
 }
 NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
@@ -319,6 +329,9 @@ PLACE_ALIASES = [
     (re.compile(r"rasuwagadhi|rasuwa[\s\-]?gadhi", re.I), "Rasuwagadhi"),
     (re.compile(r"trishuli[\s\-]?3a", re.I), "Trishuli 3A"),
     (re.compile(r"trishuli hydropower|hydropower.{0,40}trishuli|trishuli.{0,40}hydropower", re.I), "Trishuli 3A"),
+    (re.compile(r"syabrubesi(?:\s+bazar)?", re.I), "Syabrubesi"),
+    (re.compile(r"barhabise|barabishe", re.I), "Barhabise"),
+    (re.compile(r"bhote[\s\-]?koshi|bhote[\s\-]?kosi", re.I), "Bhotekoshi"),
     (re.compile(r"trishuli river|river trishuli|trisuli river", re.I), "Trishuli River"),
     (re.compile(r"lende khola|lende river", re.I), "Lende Khola"),
     (re.compile(
@@ -450,12 +463,12 @@ def locate_article_places(title: str, summary: str, body: str) -> list[dict]:
     lead_hits = locate_hits(lead)
     body_hits = locate_hits(f"{title} {summary} {body}")
     if title_hits:
-        extra = [p for p in lead_hits if PLACE_GRAIN.get(p["name"], 3) == 0]
+        extra = [p for p in lead_hits + body_hits if PLACE_GRAIN.get(p["name"], 3) <= 2]
         merged = {p["name"]: p for p in title_hits + extra}
-        return list(merged.values())[:4]
+        return list(merged.values())[:5]
     merged = {p["name"]: p for p in lead_hits + body_hits}
     ranked = sorted(merged.values(), key=lambda p: PLACE_GRAIN.get(p["name"], 3))
-    return ranked[:3]
+    return ranked[:5]
 
 
 CAPITALS = {
@@ -646,7 +659,7 @@ HTML = """<!DOCTYPE html>
     const TODAY = __TODAY__;
     const CLUSTERS = __CLUSTERS__;
     const HAZARD_COLOR = __HAZARD_COLOR__;
-    const map = L.map("map", { zoomControl: true, minZoom: 2 }).setView([20, 15], 2);
+    const map = L.map("map", { zoomControl: true, minZoom: 2 }).setView([28.1, 85.3], 8);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
       attribution: "Tiles &copy; Esri · wires + ReliefWeb",
       maxZoom: 19
