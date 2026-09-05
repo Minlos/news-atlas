@@ -573,6 +573,22 @@ def cluster(articles: list[dict]) -> list[list[int]]:
     return list(groups.values())
 
 
+def mention_snippet(text: str, names: list[str]) -> str:
+    if not text or not names:
+        return ""
+    hits = []
+    for sent in re.split(r"(?<=[.!?])\s+", text):
+        s = sent.strip()
+        if len(s) < 40 or len(s) > 300:
+            continue
+        if any(re.search(r"\b" + re.escape(n) + r"\b", s, re.I) for n in names):
+            if s not in hits:
+                hits.append(s)
+        if len(hits) == 2:
+            break
+    return " ".join(hits)
+
+
 def cluster_title(members: list[dict]) -> str:
     members = sorted(members, key=lambda a: len(a["title"]))
     return members[0]["title"]
@@ -626,8 +642,10 @@ HTML = """<!DOCTYPE html>
     .leaflet-popup-content { margin: 13px 15px; font-size: .9rem; line-height: 1.45; }
     .popup-kicker { font-size: .68rem; letter-spacing: .04em; color: var(--accent); margin: 0 0 5px; }
     .popup-title { font-size: 1.02rem; margin: 0 0 8px; }
-    .popup-item { margin: 0 0 7px; }
+    .popup-item { margin: 0 0 10px; }
     .popup-item a { color: var(--ink); }
+    .popup-places { color: var(--accent); font-size: .75rem; margin: 3px 0 0; }
+    .popup-snip { color: #d8d0c2; font-size: .78rem; margin: 4px 0 0; line-height: 1.4; }
     .popup-src { color: var(--muted); font-size: .75rem; }
     .leaflet-control-attribution { background: rgba(16,18,24,.75) !important; color: #6e675c !important; }
     .leaflet-control-attribution a { color: #8e8576 !important; }
@@ -700,10 +718,12 @@ HTML = """<!DOCTYPE html>
           radius: r, color: "#0b0c10", weight: 1,
           fillColor: HAZARD_COLOR[c.hazard] || "#d4b483", fillOpacity: 0.92
         });
-        const items = c.articles.map(a =>
-          '<p class="popup-item"><a href="' + a.link + '" target="_blank" rel="noopener">' + a.title +
-          '</a><br><span class="popup-src">' + a.source + (a.today ? " · today" : "") + "</span></p>"
-        ).join("");
+        const items = c.articles.map(a => {
+          const where = (a.places && a.places.length) ? '<p class="popup-places">' + a.places.join(" · ") + "</p>" : "";
+          const snip = a.snippet ? '<p class="popup-snip">' + a.snippet + "</p>" : "";
+          return '<p class="popup-item"><a href="' + a.link + '" target="_blank" rel="noopener">' + a.title +
+            "</a>" + where + snip + '<span class="popup-src">' + a.source + (a.today ? " · today" : "") + "</span></p>";
+        }).join("");
         m.bindPopup(
           '<p class="popup-kicker">' + c.hazard + " · " + c.place + " · " + c.articles.length + " headline" + (c.articles.length > 1 ? "s" : "") + "</p>" +
           '<p class="popup-title">' + c.title + "</p>" + items
@@ -766,6 +786,8 @@ def main() -> None:
             continue
         a["places"] = places
         a["place"] = places[0]
+        names = [p["name"] for p in places]
+        a["snippet"] = mention_snippet(a["title"] + ". " + a["summary"] + " " + extra, names)
         located.append(a)
         print(f"  {', '.join(p['name'] for p in places):28} | {a['title'][:52]}")
     print(f"located {len(located)}, no place {skipped}")
@@ -786,7 +808,14 @@ def main() -> None:
             if key in seen:
                 continue
             seen.add(key)
-            uniq.append({"title": m["title"], "link": m["link"], "source": m["source"], "today": m["today"]})
+            uniq.append({
+                "title": html.escape(m["title"]),
+                "link": m["link"],
+                "source": html.escape(m["source"]),
+                "today": m["today"],
+                "places": [html.escape(p["name"]) for p in m["places"]],
+                "snippet": html.escape(m.get("snippet") or ""),
+            })
         hazards = Counter(m["hazard"] for m in members)
         clusters.append({
             "title": cluster_title(members),
