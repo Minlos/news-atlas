@@ -37,6 +37,23 @@ FEEDS = [
     ("Google wildfires", f"https://news.google.com/rss/search?q=wildfire%20OR%20bushfire%20OR%20%22forest%20fire%22%20OR%20%22fires%20rage%22%20OR%20%22acres%20burned%22%20after:{AFTER}&hl=en-US&gl=US&ceid=US:en"),
     ("Google technogenic", "https://news.google.com/rss/search?q=chemical%20spill%20OR%20%22oil%20spill%22%20OR%20%22gas%20explosion%22%20OR%20%22factory%20explosion%22%20OR%20%22mine%20collapse%22%20OR%20%22mining%20accident%22%20OR%20%22industrial%20accident%22%20OR%20%22refinery%20fire%22%20OR%20%22pipeline%20explosion%22%20when:7d&hl=en-US&gl=US&ceid=US:en"),
     ("Google industrial", "https://news.google.com/rss/search?q=%22mine%20collapse%22%20OR%20%22mining%20accident%22%20OR%20%22gas%20explosion%22%20OR%20%22industrial%20accident%22%20OR%20%22refinery%20fire%22%20OR%20%22pipeline%20explosion%22%20when:7d&hl=en-US&gl=US&ceid=US:en"),
+    ("TASS", "https://tass.ru/rss/v2.xml"),
+    ("RIA Novosti", "https://ria.ru/export/rss2/index.xml"),
+    ("Interfax", "https://www.interfax.ru/rss.asp"),
+    ("Moscow Times", "https://www.themoscowtimes.com/rss/news"),
+    ("YSIA Yakutia", "https://ysia.ru/feed/"),
+    ("Yakutia24", "https://yk24.ru/feed/"),
+    ("NGS Krasnoyarsk", "https://ngs24.ru/text/rss.xml"),
+    ("IRCity Irkutsk", "https://www.ircity.ru/text/rss.xml"),
+    ("NGS Kuzbass", "https://ngs42.ru/text/rss.xml"),
+    ("KP Kamchatka", "https://www.kamchatka.kp.ru/rss/allsections.xml"),
+    ("KP Far East", "https://www.dv.kp.ru/rss/allsections.xml"),
+    ("Chita.ru", "https://www.chita.ru/rss/"),
+    ("Yamal 89.ru", "https://89.ru/text/rss.xml"),
+    ("E1 Yekaterinburg", "https://www.e1.ru/text/rss.xml"),
+    ("74.ru Chelyabinsk", "https://74.ru/text/rss.xml"),
+    ("Google RU disasters", "https://news.google.com/rss/search?q=%D0%BB%D0%B5%D1%81%D0%BD%D0%BE%D0%B9%20%D0%BF%D0%BE%D0%B6%D0%B0%D1%80%20OR%20%D0%BF%D0%B0%D0%B2%D0%BE%D0%B4%D0%BE%D0%BA%20OR%20%D0%BD%D0%B0%D0%B2%D0%BE%D0%B4%D0%BD%D0%B5%D0%BD%D0%B8%D0%B5%20OR%20%D0%B7%D0%B5%D0%BC%D0%BB%D0%B5%D1%82%D1%80%D1%8F%D1%81%D0%B5%D0%BD%D0%B8%D0%B5%20OR%20%D0%B8%D0%B7%D0%B2%D0%B5%D1%80%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%20when:7d&hl=ru&gl=RU&ceid=RU:ru"),
+    ("Google RU industrial", "https://news.google.com/rss/search?q=%D1%80%D0%B0%D0%B7%D0%BB%D0%B8%D0%B2%20%D0%BD%D0%B5%D1%84%D1%82%D0%B8%20OR%20%22%D0%B2%D0%B7%D1%80%D1%8B%D0%B2%20%D0%BD%D0%B0%20%D1%88%D0%B0%D1%85%D1%82%D0%B5%22%20OR%20%22%D0%B0%D0%B2%D0%B0%D1%80%D0%B8%D1%8F%20%D0%BD%D0%B0%20%D0%9D%D0%9F%D0%97%22%20OR%20%22%D0%BF%D0%BE%D0%B6%D0%B0%D1%80%20%D0%BD%D0%B0%20%D0%9D%D0%9F%D0%97%22%20OR%20%22%D0%BE%D0%B1%D1%80%D1%83%D1%88%D0%B5%D0%BD%D0%B8%D0%B5%20%D1%88%D0%B0%D1%85%D1%82%D1%8B%22%20when:7d&hl=ru&gl=RU&ceid=RU:ru"),
 ]
 
 # City first, then country. Longer names win via sorted match.
@@ -81,6 +98,62 @@ PLACES = [
     ("Kiev", 50.4501, 30.5234, "Europe"),
     ("Moscow", 55.7558, 37.6173, "Europe"),
     ("St Petersburg", 59.9311, 30.3609, "Europe"),
+    ("Yakutsk", 62.0355, 129.6755, "Asia"),
+    ("Yakutia", 66.7613, 124.1238, "Asia"),
+    ("Krasnoyarsk", 56.0153, 92.8932, "Asia"),
+    ("Krasnoyarsky Krai", 64.2500, 95.0000, "Asia"),
+    ("Evenkia", 64.2833, 100.2500, "Asia"),
+    ("Turukhansk", 65.7960, 87.9620, "Asia"),
+    ("Taymyr", 73.5000, 80.5000, "Asia"),
+    ("Lesosibirsk", 58.2217, 92.5037, "Asia"),
+    ("Yeniseysk", 58.4497, 92.1797, "Asia"),
+    ("Norilsk", 69.3558, 88.1893, "Asia"),
+    ("Irkutsk", 52.2870, 104.3050, "Asia"),
+    ("Khabarovsk", 48.4827, 135.0840, "Asia"),
+    ("Vladivostok", 43.1155, 131.8855, "Asia"),
+    ("Petropavlovsk-Kamchatsky", 53.0370, 158.6559, "Asia"),
+    ("Kamchatka", 56.0000, 159.0000, "Asia"),
+    ("Yuzhno-Sakhalinsk", 46.9591, 142.7380, "Asia"),
+    ("Sakhalin", 50.0000, 143.0000, "Asia"),
+    ("Magadan", 59.5612, 150.8090, "Asia"),
+    ("Chita", 52.0515, 113.4712, "Asia"),
+    ("Transbaikalia", 52.8000, 116.0000, "Asia"),
+    ("Ulan-Ude", 51.8272, 107.6063, "Asia"),
+    ("Buryatia", 53.0000, 109.0000, "Asia"),
+    ("Blagoveshchensk", 50.2906, 127.5272, "Asia"),
+    ("Novosibirsk", 55.0084, 82.9357, "Asia"),
+    ("Tomsk", 56.4846, 84.9476, "Asia"),
+    ("Omsk", 54.9885, 73.3242, "Asia"),
+    ("Barnaul", 53.3548, 83.7698, "Asia"),
+    ("Kemerovo", 55.3541, 86.0898, "Asia"),
+    ("Novokuznetsk", 53.7596, 87.1216, "Asia"),
+    ("Kuzbass", 54.9000, 86.9000, "Asia"),
+    ("Salekhard", 66.5299, 66.6143, "Asia"),
+    ("Yamal", 67.0000, 74.0000, "Asia"),
+    ("Surgut", 61.2540, 73.3962, "Asia"),
+    ("Nizhnevartovsk", 60.9397, 76.5696, "Asia"),
+    ("Yekaterinburg", 56.8389, 60.6057, "Europe"),
+    ("Chelyabinsk", 55.1644, 61.4368, "Europe"),
+    ("Magnitogorsk", 53.4072, 58.9794, "Europe"),
+    ("Perm", 58.0105, 56.2502, "Europe"),
+    ("Ufa", 54.7388, 55.9721, "Europe"),
+    ("Kazan", 55.7887, 49.1221, "Europe"),
+    ("Murmansk", 68.9585, 33.0827, "Europe"),
+    ("Arkhangelsk", 64.5399, 40.5146, "Europe"),
+    ("Vorkuta", 67.4974, 64.0355, "Europe"),
+    ("Rostov-on-Don", 47.2357, 39.7015, "Europe"),
+    ("Krasnodar", 45.0355, 38.9753, "Europe"),
+    ("Sochi", 43.6028, 39.7342, "Europe"),
+    ("Volgograd", 48.7080, 44.5133, "Europe"),
+    ("Primorye", 45.0000, 135.0000, "Asia"),
+    ("Far East", 54.0000, 140.0000, "Asia"),
+    ("Komi", 64.0000, 54.0000, "Europe"),
+    ("Tuapse", 44.1053, 39.0833, "Europe"),
+    ("Bashkortostan", 54.5000, 56.9000, "Europe"),
+    ("Mirny", 62.5353, 113.9610, "Asia"),
+    ("Neryungri", 56.6584, 124.7250, "Asia"),
+    ("Khakassia", 53.5000, 90.0000, "Asia"),
+    ("Tsimlyansk", 47.6473, 42.0947, "Europe"),
     ("Istanbul", 41.0082, 28.9784, "Europe"),
     ("Ankara", 39.9334, 32.8597, "Middle East"),
     ("Tel Aviv", 32.0853, 34.7818, "Middle East"),
@@ -315,6 +388,9 @@ CITIES = {n for n, _, _, _ in PLACES if n not in {
     "Kentucky", "Minnesota", "Wisconsin", "Oklahoma", "Kansas", "Indiana",
     "Mississippi", "West Virginia", "Quebec", "Amazon", "Algeria", "DR Congo",
     "Washington State",
+    "Yakutia", "Krasnoyarsky Krai", "Evenkia", "Taymyr", "Kamchatka", "Sakhalin",
+    "Transbaikalia", "Buryatia", "Kuzbass", "Yamal", "Primorye", "Far East", "Komi",
+    "Siberia", "Bashkortostan", "Khakassia",
 }}
 
 STOP = {
@@ -333,10 +409,12 @@ HAZARDS = [
         r"\bfires?\s+(?:rage|raging|spread|spreading|burn|burning|engulf)|"
         r"\b(?:rage|raging|spread|burning)\s+fires?\b|"
         r"\bblaze\b.{0,40}\b(?:forest|bush|wild)|"
-        r"\bлесн\w{0,10}\s+пожар\w*|\bпожар\w*\s+в\s+лес\w*", re.I)),
+        r"\bлесн\w{0,10}\s+пожар\w*|\bпожар\w*\s+в\s+лес\w*|"
+        r"\bландшафтн\w{0,8}\s+пожар\w*|\bторфян\w{0,8}\s+пожар\w*|"
+        r"\bзадымлен\w*|\bдым\w{0,8}.{0,40}пожар", re.I)),
     ("flood", re.compile(
         r"\bfloods?\b|\bflooding\b|\bflooded\b|\bflash floods?\b|"
-        r"\bнаводнен\w*|\bпаводок\b", re.I)),
+        r"\bнаводнен\w*|\bпаводок\w*|\bподтоплен\w*", re.I)),
     ("earthquake", re.compile(
         r"\bearthquakes?\b|\baftershocks?\b|\bземлетрясен\w*|"
         r"\b(?<!earth)quakes?\b", re.I)),
@@ -349,7 +427,8 @@ HAZARDS = [
     ("tsunami", re.compile(r"\btsunamis?\b|\bцунами\b", re.I)),
     ("avalanche", re.compile(r"\bavalanches?\b|\bлавин\w*", re.I)),
     ("technogenic", re.compile(
-        r"\bindustrial accidents?\b|\btechnogenic\b|\bтехногенн\w*|"
+        r"\bindustrial accidents?\b|\btechnogenic\b|"
+        r"\bтехногенн\w{0,8}\s+(?:авари\w*|катастроф\w*|чп)\b|"
         r"\bindustrial (?:explosions?|fires?|blasts?|disasters?)\b|"
         r"\bchemical spills?\b|\btoxic (?:spills?|leaks?|clouds?|gas)\b|"
         r"\boil spills?\b|\bgas (?:leaks?|explosions?|blasts?)\b|"
@@ -361,7 +440,12 @@ HAZARDS = [
         r"\bmine (?:collapses?|accidents?|explosions?|blasts?)\b|"
         r"\b(?:coal )?mining accidents?\b|"
         r"\bnuclear (?:accidents?|leaks?|meltdowns?|disasters?)\b|"
-        r"\bradiation leaks?\b|\bразлив(?:ы|е|а)?\s+нефти\b|"
+        r"\bradiation leaks?\b|\bразлив\w{0,6}\s+нефт|"
+        r"\bвзрыв\w{0,6}\s+на\s+(?:шахте|заводе|нпз|трубопроводе|нефтепроводе|газопроводе)|"
+        r"\bавари\w{0,6}\s+на\s+(?:шахте|заводе|нпз|трубопроводе|тэц|аэс)|"
+        r"\bпожар\w{0,6}\s+на\s+(?:нпз|нефтепровод\w*|газопровод\w*|шахте|заводе)|"
+        r"\bобрушен\w{0,8}.{0,12}шахт|"
+        r"\bвыброс\w{0,6}\s+(?:хлора|аммиака)|"
         r"\b(?:train|freight|rail(?:way|road)?) derailments?\b|"
         r"\btrains? derail(?:s|ed|ing)?\b|"
         r"\bhazmat\b|\bchlorine leaks?\b|\bammonia leaks?\b|"
@@ -396,7 +480,8 @@ REJECT = re.compile(
     r"\bnuclear (?:deal|talks?|weapon|warheads?|enrichment|proliferation|summit)\b|"
     r"\bchemical weapons?\b|"
     r"\bmissiles?\b|\bbombing\b|\bshelling\b|"
-    r"\boil prices?\b",
+    r"\boil prices?\b|"
+    r"\bспецоперац\w*|\bобстрел\w*|\bбеспилотник\w*|\bбпла\b",
     re.I,
 )
 
@@ -417,16 +502,18 @@ HAPPENING = re.compile(
     r"\baftershocks?\b|\blandfall\b|\berupt\w*|\bhaze\b|\bwildfires?\b|"
     r"\bbushfires?\b|\btunnel\b|\bdisplaced\b|\bdamaged?\b|\bhit by\b|"
     r"\brescue\b|\bsurvivors?\b|\bwarning\b|\balert\b|"
-    r"\bcyclones?\b|\btyphoons?\b|\bhurricanes?\b|\bearthquakes?\b",
+    r"\bcyclones?\b|\btyphoons?\b|\bhurricanes?\b|\bearthquakes?\b|"
+    r"\bпогиб\w*|\bэвакуир\w*|\bпотушил\w*|\bдействует\s+пожар|"
+    r"\bплощад\w{0,6}.{0,12}\bга\b|\bчс\b",
     re.I,
 )
 
 
 def classify_hazard(text: str) -> str | None:
-    for name, rx in HAZARDS:
-        if rx.search(text or ""):
-            return name
-    return None
+    hits = [name for name, rx in HAZARDS if rx.search(text or "")]
+    if "technogenic" in hits:
+        return "technogenic"
+    return hits[0] if hits else None
 
 
 def is_happening(title: str, summary: str) -> bool:
@@ -464,6 +551,19 @@ PLACE_GRAIN = {
     "Twin Falls": 1, "Fort Smith": 1, "Slidell": 1, "Loudon County": 1,
     "Anclote Power Plant": 0, "Longview": 1, "Nippon Dynawave": 0, "Rome NY": 1,
     "Bille": 1, "Rubaya": 1, "Yaroslavl": 1, "El Paso": 1, "Port Harcourt": 1,
+    "Yakutsk": 1, "Yakutia": 2, "Krasnoyarsk": 1, "Krasnoyarsky Krai": 2,
+    "Evenkia": 2, "Turukhansk": 1, "Taymyr": 2, "Lesosibirsk": 1, "Yeniseysk": 1,
+    "Norilsk": 1, "Irkutsk": 1, "Khabarovsk": 1, "Vladivostok": 1,
+    "Petropavlovsk-Kamchatsky": 1, "Kamchatka": 2, "Yuzhno-Sakhalinsk": 1,
+    "Sakhalin": 2, "Magadan": 1, "Chita": 1, "Transbaikalia": 2, "Ulan-Ude": 1,
+    "Buryatia": 2, "Blagoveshchensk": 1, "Novosibirsk": 1, "Tomsk": 1, "Omsk": 1,
+    "Barnaul": 1, "Kemerovo": 1, "Novokuznetsk": 1, "Kuzbass": 2, "Salekhard": 1,
+    "Yamal": 2, "Surgut": 1, "Nizhnevartovsk": 1, "Yekaterinburg": 1,
+    "Chelyabinsk": 1, "Magnitogorsk": 1, "Perm": 1, "Ufa": 1, "Kazan": 1,
+    "Murmansk": 1, "Arkhangelsk": 1, "Vorkuta": 1, "Rostov-on-Don": 1,
+    "Krasnodar": 1, "Sochi": 1, "Volgograd": 1, "Primorye": 2, "Far East": 2,
+    "Komi": 2, "Siberia": 2, "Tuapse": 1, "Bashkortostan": 2, "Mirny": 1,
+    "Neryungri": 1, "Khakassia": 2, "Tsimlyansk": 1,
 }
 
 
@@ -553,6 +653,67 @@ PLACE_ALIASES = [
     (re.compile(r"el[\s\-]?paso", re.I), "El Paso"),
     (re.compile(r"\brome\b.{0,40}wktv|wktv.{0,40}\brome\b|rome,?\s*n\.?y", re.I), "Rome NY"),
     (re.compile(r"yaroslavl", re.I), "Yaroslavl"),
+    (re.compile(r"якутск", re.I), "Yakutsk"),
+    (re.compile(r"якути[яииюе]|саха \(якутия\)|республик\w{0,4} саха", re.I), "Yakutia"),
+    (re.compile(r"красноярск\w{0,10}\s+кра", re.I), "Krasnoyarsky Krai"),
+    (re.compile(r"красноярск", re.I), "Krasnoyarsk"),
+    (re.compile(r"эвенки", re.I), "Evenkia"),
+    (re.compile(r"туруханск", re.I), "Turukhansk"),
+    (re.compile(r"таймыр", re.I), "Taymyr"),
+    (re.compile(r"лесосибирск", re.I), "Lesosibirsk"),
+    (re.compile(r"енисейск", re.I), "Yeniseysk"),
+    (re.compile(r"норильск", re.I), "Norilsk"),
+    (re.compile(r"иркутск", re.I), "Irkutsk"),
+    (re.compile(r"хабаровск", re.I), "Khabarovsk"),
+    (re.compile(r"владивосток", re.I), "Vladivostok"),
+    (re.compile(r"петропавловск-камчатск|петропавловск камчатск", re.I), "Petropavlovsk-Kamchatsky"),
+    (re.compile(r"камчатк", re.I), "Kamchatka"),
+    (re.compile(r"южно-сахалинск", re.I), "Yuzhno-Sakhalinsk"),
+    (re.compile(r"сахалин", re.I), "Sakhalin"),
+    (re.compile(r"магадан", re.I), "Magadan"),
+    (re.compile(r"\bчит[аеуы]\b", re.I), "Chita"),
+    (re.compile(r"забайкал", re.I), "Transbaikalia"),
+    (re.compile(r"улан-уд[эе]", re.I), "Ulan-Ude"),
+    (re.compile(r"бурят", re.I), "Buryatia"),
+    (re.compile(r"благовещенск", re.I), "Blagoveshchensk"),
+    (re.compile(r"новосибирск", re.I), "Novosibirsk"),
+    (re.compile(r"\bтомск", re.I), "Tomsk"),
+    (re.compile(r"\bомск", re.I), "Omsk"),
+    (re.compile(r"барнаул", re.I), "Barnaul"),
+    (re.compile(r"кемеров", re.I), "Kemerovo"),
+    (re.compile(r"новокузнецк", re.I), "Novokuznetsk"),
+    (re.compile(r"кузбасс", re.I), "Kuzbass"),
+    (re.compile(r"салехард", re.I), "Salekhard"),
+    (re.compile(r"ямал", re.I), "Yamal"),
+    (re.compile(r"сургут", re.I), "Surgut"),
+    (re.compile(r"нижневартовск", re.I), "Nizhnevartovsk"),
+    (re.compile(r"екатеринбург", re.I), "Yekaterinburg"),
+    (re.compile(r"челябинск", re.I), "Chelyabinsk"),
+    (re.compile(r"магнитогорск", re.I), "Magnitogorsk"),
+    (re.compile(r"\bперм[иьие]", re.I), "Perm"),
+    (re.compile(r"\bуф[аеуы]", re.I), "Ufa"),
+    (re.compile(r"казан", re.I), "Kazan"),
+    (re.compile(r"мурманск", re.I), "Murmansk"),
+    (re.compile(r"архангельск", re.I), "Arkhangelsk"),
+    (re.compile(r"воркут", re.I), "Vorkuta"),
+    (re.compile(r"ростов-на-дону|ростовской област", re.I), "Rostov-on-Don"),
+    (re.compile(r"краснодар", re.I), "Krasnodar"),
+    (re.compile(r"\bсочи\b", re.I), "Sochi"),
+    (re.compile(r"волгоград", re.I), "Volgograd"),
+    (re.compile(r"приморск\w{0,6}\s+кра[яй]|приморье", re.I), "Primorye"),
+    (re.compile(r"дальн\w{0,6}\s+восток", re.I), "Far East"),
+    (re.compile(r"\bсибир", re.I), "Siberia"),
+    (re.compile(r"\bкоми\b", re.I), "Komi"),
+    (re.compile(r"ярославл", re.I), "Yaroslavl"),
+    (re.compile(r"туапсе", re.I), "Tuapse"),
+    (re.compile(r"башкири|башкортостан", re.I), "Bashkortostan"),
+    (re.compile(r"мирнинск|\bмирны", re.I), "Mirny"),
+    (re.compile(r"нерюнгр", re.I), "Neryungri"),
+    (re.compile(r"хакас", re.I), "Khakassia"),
+    (re.compile(r"цимлянск", re.I), "Tsimlyansk"),
+    (re.compile(r"янао|ямало-ненецк", re.I), "Yamal"),
+    (re.compile(r"поморь", re.I), "Arkhangelsk"),
+    (re.compile(r"хангаласск", re.I), "Yakutsk"),
 ]
 
 
