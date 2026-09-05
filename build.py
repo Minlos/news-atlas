@@ -130,8 +130,20 @@ PLACES = [
     ("Canberra", -35.2809, 149.1300, "Asia"),
     ("Wellington", -41.2865, 174.7762, "Asia"),
     ("Kathmandu", 27.7172, 85.3240, "Asia"),
+    ("Rasuwagadhi", 28.2789, 85.3775, "Asia"),
+    ("Timure", 28.2780, 85.3570, "Asia"),
+    ("Syabrubesi", 28.1639, 85.3478, "Asia"),
+    ("Dhunche", 28.1106, 85.2983, "Asia"),
     ("Rasuwa", 28.1750, 85.3300, "Asia"),
-    ("Nepal", 27.7172, 85.3240, "Asia"),
+    ("Trishuli 3A", 27.9160, 85.1450, "Asia"),
+    ("Trishuli", 27.9070, 85.1360, "Asia"),
+    ("Bidur", 27.8960, 85.1460, "Asia"),
+    ("Nuwakot", 27.8700, 85.1700, "Asia"),
+    ("Dhading", 27.9100, 84.8900, "Asia"),
+    ("Chitwan", 27.5291, 84.3542, "Asia"),
+    ("Gorkha", 28.0460, 84.6200, "Asia"),
+    ("Tanahu", 27.9440, 84.2500, "Asia"),
+    ("Nepal", 28.3949, 84.1240, "Asia"),
     ("California", 36.7783, -119.4179, "Americas"),
     ("Hawaii", 19.8968, -155.5828, "Americas"),
     ("Alberta", 53.9333, -116.5769, "Americas"),
@@ -204,6 +216,7 @@ CITIES = {n for n, _, _, _ in PLACES if n not in {
     "Japan", "South Korea", "North Korea", "India", "Pakistan", "Afghanistan",
     "Bangladesh", "Myanmar", "Thailand", "Vietnam", "Indonesia", "Philippines",
     "Australia", "Nepal", "California", "Hawaii", "Alberta", "British Columbia",
+    "Nuwakot", "Dhading", "Chitwan", "Gorkha", "Tanahu", "Rasuwa",
     "Greece", "Portugal", "Chile", "Haiti", "El Salvador", "Libya", "Siberia",
 }}
 
@@ -253,7 +266,8 @@ REJECT = re.compile(
     r"\bprotesters?\b|\bvoted to\b|\bprotection cluster\b|\bweekly situation\b|"
     r"\brevealed:\b|\blessons learned\b|\breview [–-]\b|\bhere are some other\b|"
     r"\bextraordinary rescues\b|\bcompanies\b.{0,40}\bwater\b|\bwar in\b|"
-    r"\btroops\b|\barmed conflict\b|\bPM says\b",
+    r"\btroops\b|\barmed conflict\b|\bPM says\b|"
+    r"\bwhat we know about the link\b|\bclimate crisis\b",
     re.I,
 )
 
@@ -286,6 +300,20 @@ def is_happening(title: str, summary: str) -> bool:
 
 PLACE_BY_NAME = {n.lower(): (n, lat, lng, region) for n, lat, lng, region in PLACES}
 PLACE_NAMES = sorted(PLACE_BY_NAME, key=len, reverse=True)
+
+# Finer beats coarser: site 0, town 1, district 2, country 3.
+PLACE_GRAIN = {
+    "Rasuwagadhi": 0, "Trishuli 3A": 0, "Timure": 1, "Syabrubesi": 1, "Dhunche": 1,
+    "Bidur": 1, "Trishuli": 1, "Kathmandu": 1, "Rasuwa": 2, "Nuwakot": 2,
+    "Dhading": 2, "Chitwan": 2, "Gorkha": 2, "Tanahu": 2, "Nepal": 3,
+}
+NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
+PLACE_ALIASES = [
+    (re.compile(r"rasuwagadhi|rasuwa[\s\-]?gadhi", re.I), "Rasuwagadhi"),
+    (re.compile(r"trishuli[\s\-]?3a", re.I), "Trishuli 3A"),
+    (re.compile(r"nepal[\s\-–]+tibet", re.I), "Rasuwagadhi"),
+    (re.compile(r"(?:\b9\b|nine|10|ten)\s+days.{0,80}tunnel|tunnel.{0,80}(?:\b9\b|nine|10|ten)\s+days", re.I), "Trishuli 3A"),
+]
 
 
 def fetch(url: str) -> bytes | None:
@@ -348,27 +376,57 @@ def parse_feed(blob: bytes, source: str) -> list[dict]:
                     link = child.get("href")
                     break
         summary = re.sub(r"<[^>]+>", " ", item_text(el, ["description", "summary", "encoded"]))
-        summary = re.sub(r"\s+", " ", summary).strip()[:400]
+        summary = re.sub(r"\s+", " ", summary).strip()[:2000]
         pub = parse_date(item_text(el, ["pubDate", "date", "published", "updated"]))
         out.append({"title": title, "link": link, "summary": summary, "source": source, "when": pub})
     return out
 
 
+def article_text(url: str) -> str:
+    if not url or not url.startswith("http"):
+        return ""
+    blob = fetch(url)
+    if not blob:
+        return ""
+    raw = blob.decode("utf-8", "ignore")[:80000]
+    raw = re.sub(r"(?is)<script[^>]*>.*?</script>", " ", raw)
+    raw = re.sub(r"(?is)<style[^>]*>.*?</style>", " ", raw)
+    raw = re.sub(r"<[^>]+>", " ", raw)
+    raw = html.unescape(raw)
+    return re.sub(r"\s+", " ", raw).strip()[:8000]
+
+
 def locate(text: str) -> dict | None:
-    blob = " " + text + " "
-    hits = []
+    blob = " " + (text or "") + " "
+    blob = re.sub(r"\bin Kathmandu\b", " ", blob, flags=re.I)
     lower = blob.lower()
+    for rx, canon in PLACE_ALIASES:
+        if rx.search(lower):
+            lower += " " + canon.lower() + " "
+    hits = []
     for name in PLACE_NAMES:
-        if re.search(r"[^a-z]" + re.escape(name) + r"[^a-z]", lower):
+        if re.search(r"[^a-z0-9]" + re.escape(name) + r"[^a-z0-9]", lower):
             canon, lat, lng, region = PLACE_BY_NAME[name]
             pos = lower.find(name)
-            city = canon in CITIES
-            hits.append((0 if city else 1, pos, -len(name), canon, lat, lng, region))
+            grain = PLACE_GRAIN.get(canon, 1 if canon in CITIES else 3)
+            hits.append((grain, pos, -len(name), canon, lat, lng, region))
     if not hits:
         return None
     hits.sort()
     _, _, _, canon, lat, lng, region = hits[0]
     return {"name": canon, "lat": lat, "lng": lng, "region": region}
+
+
+def locate_article(title: str, summary: str, body: str) -> dict | None:
+    best = None
+    for chunk in (title, f"{title} {summary}", f"{title} {summary} {body}"):
+        hit = locate(chunk)
+        if not hit:
+            continue
+        best = hit
+        if PLACE_GRAIN.get(hit["name"], 3) <= 2:
+            return hit
+    return best
 
 
 def tokens(title: str) -> set[str]:
@@ -405,12 +463,12 @@ def cluster(articles: list[dict]) -> list[list[int]]:
                 and articles[j]["place"]
                 and articles[i]["place"]["name"] == articles[j]["place"]["name"]
             )
+            if not same_place:
+                continue
             same_hazard = articles[i].get("hazard") and articles[i]["hazard"] == articles[j].get("hazard")
             jac = jaccard(toks[i], toks[j])
             overlap = toks[i] & toks[j]
-            if (same_hazard and same_place) or (same_hazard and jac >= 0.28) or jac >= 0.4 or (
-                same_place and jac >= 0.18
-            ) or (len(overlap) >= 3 and jac >= 0.22):
+            if same_hazard or jac >= 0.28 or (len(overlap) >= 3 and jac >= 0.22):
                 union(i, j)
     groups = defaultdict(list)
     for i in range(n):
@@ -599,12 +657,15 @@ def main() -> None:
     located = []
     skipped = 0
     for a in disasters:
-        place = locate(a["title"] + " " + a["summary"])
+        extra = article_text(a["link"])
+        place = locate_article(a["title"], a["summary"], extra)
         if not place:
             skipped += 1
+            print(f"  no place | {a['title'][:70]}")
             continue
         a["place"] = place
         located.append(a)
+        print(f"  {place['name']:16} | {a['title'][:62]}")
     print(f"located {len(located)}, no place {skipped}")
     print("hazards", Counter(a["hazard"] for a in located))
 
