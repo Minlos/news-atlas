@@ -325,6 +325,33 @@ PLACE_GRAIN = {
     "Sumatra": 2, "Luzon": 2, "Hawaii": 2, "California": 2,
 }
 NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
+
+# Plant, border and village coords from OSM Nominatim and Global Energy Monitor.
+ACCURATE = {
+    "Trishuli 3A": (28.02559, 85.18605),
+    "Trishuli River": (28.02559, 85.18605),
+    "Trishuli": (27.92241, 85.14880),
+    "Rasuwagadhi": (28.23920, 85.35750),
+    "Nepal-Tibet border": (28.27777, 85.37778),
+    "Lende Khola": (28.27600, 85.37500),
+    "Timure": (28.25285, 85.36667),
+    "Dhunche": (28.11279, 85.29606),
+    "Rasuwa": (28.11279, 85.29606),
+    "Bidur": (27.89526, 85.14645),
+    "Nuwakot": (27.89526, 85.14645),
+    "Barhabise": (27.78781, 85.89958),
+    "Chilime": (28.18362, 85.30224),
+    "Betrawati": (27.97311, 85.18595),
+    "Mailung": (28.07177, 85.20700),
+    "Syabrubesi": (28.17250, 85.34780),
+}
+
+
+def with_coords(place: dict) -> dict:
+    pair = ACCURATE.get(place["name"])
+    if pair:
+        return {**place, "lat": pair[0], "lng": pair[1]}
+    return place
 PLACE_ALIASES = [
     (re.compile(r"rasuwagadhi|rasuwa[\s\-]?gadhi", re.I), "Rasuwagadhi"),
     (re.compile(r"trishuli[\s\-]?3a", re.I), "Trishuli 3A"),
@@ -444,7 +471,9 @@ def locate_hits(text: str) -> list[dict]:
             pos = lower.find(name)
             prev = found.get(canon)
             if prev is None or (grain, pos, -len(name)) < prev[0]:
-                found[canon] = ((grain, pos, -len(name)), {"name": canon, "lat": lat, "lng": lng, "region": region})
+                found[canon] = ((grain, pos, -len(name)), with_coords(
+                    {"name": canon, "lat": lat, "lng": lng, "region": region}
+                ))
     places = [p for _, p in found.values()]
     names = [p["name"] for p in places]
     places = [p for p in places if not any(q != p["name"] and q.startswith(p["name"]) for q in names)]
@@ -480,7 +509,7 @@ CAPITALS = {
 
 def place_record(name: str) -> dict:
     canon, lat, lng, region = PLACE_BY_NAME[name.lower()]
-    return {"name": canon, "lat": lat, "lng": lng, "region": region}
+    return with_coords({"name": canon, "lat": lat, "lng": lng, "region": region})
 
 
 def is_coarse(place: dict | None) -> bool:
