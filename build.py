@@ -226,7 +226,18 @@ PLACES = [
     ("Denver", 39.7392, -104.9903, "Americas"),
     ("Phoenix", 33.4484, -112.0740, "Americas"),
     ("El Paso", 31.7619, -106.4850, "Americas"),
+    ("Twin Falls", 42.5559, -114.4701, "Americas"),
+    ("Fort Smith", 35.3880, -94.4265, "Americas"),
+    ("Slidell", 30.2752, -89.7812, "Americas"),
+    ("Loudon County", 35.7490, -84.3203, "Americas"),
+    ("Anclote Power Plant", 28.1843, -82.7875, "Americas"),
+    ("Longview", 46.1377, -122.9345, "Americas"),
+    ("Nippon Dynawave", 46.1302, -122.9807, "Americas"),
+    ("Rome NY", 43.2102, -75.4584, "Americas"),
     ("Port Harcourt", 4.8156, 7.0498, "Africa"),
+    ("Bille", 4.5764, 6.8879, "Africa"),
+    ("Rubaya", -1.5472, 28.8743, "Africa"),
+    ("Yaroslavl", 57.6266, 39.8937, "Europe"),
     ("DR Congo", -4.0383, 21.7587, "Africa"),
     ("Washington State", 47.7511, -120.7401, "Americas"),
     ("Yosemite", 37.8651, -119.5383, "Americas"),
@@ -450,7 +461,20 @@ PLACE_GRAIN = {
     "South Carolina": 2, "Tennessee": 2, "Kentucky": 2, "Minnesota": 2, "Wisconsin": 2,
     "Oklahoma": 2, "Kansas": 2, "Indiana": 2, "Mississippi": 2, "West Virginia": 2,
     "Quebec": 2, "DR Congo": 2, "Washington State": 2,
+    "Twin Falls": 1, "Fort Smith": 1, "Slidell": 1, "Loudon County": 1,
+    "Anclote Power Plant": 0, "Longview": 1, "Nippon Dynawave": 0, "Rome NY": 1,
+    "Bille": 1, "Rubaya": 1, "Yaroslavl": 1, "El Paso": 1, "Port Harcourt": 1,
 }
+
+
+def place_grain(name: str) -> int:
+    if name in PLACE_GRAIN:
+        return PLACE_GRAIN[name]
+    if name in CITIES:
+        return 1
+    return 3
+
+
 NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
 
 # Plant, border and village coords from OSM Nominatim and Global Energy Monitor.
@@ -471,6 +495,18 @@ ACCURATE = {
     "Betrawati": (27.97311, 85.18595),
     "Mailung": (28.07177, 85.20700),
     "Syabrubesi": (28.17250, 85.34780),
+    "Twin Falls": (42.55585, -114.47007),
+    "Fort Smith": (35.38803, -94.42650),
+    "Slidell": (30.27519, -89.78117),
+    "Loudon County": (35.74900, -84.32029),
+    "Anclote Power Plant": (28.18429, -82.78745),
+    "Longview": (46.13770, -122.93446),
+    "Nippon Dynawave": (46.13022, -122.98074),
+    "Rome NY": (43.21022, -75.45840),
+    "El Paso": (31.76010, -106.48705),
+    "Bille": (4.57642, 6.88786),
+    "Rubaya": (-1.54724, 28.87433),
+    "Yaroslavl": (57.62657, 39.89369),
 }
 
 
@@ -502,14 +538,21 @@ PLACE_ALIASES = [
     (re.compile(r"yellowstone river", re.I), "Montana"),
     (re.compile(r"fraser river", re.I), "British Columbia"),
     (re.compile(r"\bdr congo\b|\bdrc\b|democratic republic of (?:the )?congo", re.I), "DR Congo"),
-    (re.compile(r"\bbille\b|\brivers community\b", re.I), "Port Harcourt"),
-    (re.compile(r"twin falls", re.I), "Idaho"),
-    (re.compile(r"fort smith", re.I), "Arkansas"),
-    (re.compile(r"slidell", re.I), "Louisiana"),
-    (re.compile(r"loudon county", re.I), "Tennessee"),
-    (re.compile(r"anclote", re.I), "Florida"),
-    (re.compile(r"washington state|\blongview\b", re.I), "Washington State"),
-    (re.compile(r"el paso", re.I), "El Paso"),
+    (re.compile(
+        r"\brubaya\b|(?:coltan|mine collapse).{0,40}(?:congo|drc)|(?:congo|drc).{0,40}mine collapse",
+        re.I,
+    ), "Rubaya"),
+    (re.compile(r"\bbille\b|\brivers community\b", re.I), "Bille"),
+    (re.compile(r"twin falls", re.I), "Twin Falls"),
+    (re.compile(r"fort smith", re.I), "Fort Smith"),
+    (re.compile(r"slidell", re.I), "Slidell"),
+    (re.compile(r"loudon county|\bloudon\b", re.I), "Loudon County"),
+    (re.compile(r"anclote|duke energy.{0,30}anclote", re.I), "Anclote Power Plant"),
+    (re.compile(r"nippon(?:\s+dynawave)?", re.I), "Nippon Dynawave"),
+    (re.compile(r"\blongview\b", re.I), "Longview"),
+    (re.compile(r"el[\s\-]?paso", re.I), "El Paso"),
+    (re.compile(r"\brome\b.{0,40}wktv|wktv.{0,40}\brome\b|rome,?\s*n\.?y", re.I), "Rome NY"),
+    (re.compile(r"yaroslavl", re.I), "Yaroslavl"),
 ]
 
 
@@ -610,7 +653,7 @@ def locate_hits(text: str, allow_capitals: bool = False) -> list[dict]:
             canon, lat, lng, region = PLACE_BY_NAME[name]
             if canon in CAPITALS and not allow_capitals:
                 continue
-            grain = PLACE_GRAIN.get(canon, 1 if canon in CITIES else 3)
+            grain = place_grain(canon)
             if grain >= 3:
                 continue
             pos = lower.find(name)
@@ -622,7 +665,7 @@ def locate_hits(text: str, allow_capitals: bool = False) -> list[dict]:
     places = [p for _, p in found.values()]
     names = [p["name"] for p in places]
     places = [p for p in places if not any(q != p["name"] and q.startswith(p["name"]) for q in names)]
-    places.sort(key=lambda p: (PLACE_GRAIN.get(p["name"], 3), p["name"]))
+    places.sort(key=lambda p: (place_grain(p["name"]), p["name"]))
     return places
 
 
@@ -633,15 +676,23 @@ def locate(text: str, allow_capitals: bool = False) -> dict | None:
 
 def locate_article_places(title: str, summary: str, body: str, allow_capitals: bool = False) -> list[dict]:
     title_hits = locate_hits(title, allow_capitals=allow_capitals)
+    core = [p for p in title_hits if p["name"] not in NEWSROOM]
+    if core:
+        title_hits = core
     lead = f"{summary} {body}"[:1800]
     lead_hits = locate_hits(lead, allow_capitals=allow_capitals)
     body_hits = locate_hits(f"{title} {summary} {body}", allow_capitals=allow_capitals)
     if title_hits:
-        extra = [p for p in lead_hits + body_hits if PLACE_GRAIN.get(p["name"], 3) <= 2]
+        extra = [
+            p for p in lead_hits + body_hits
+            if place_grain(p["name"]) <= 2 and p["name"] not in NEWSROOM
+        ]
         merged = {p["name"]: p for p in title_hits + extra}
         return list(merged.values())[:5]
-    merged = {p["name"]: p for p in lead_hits + body_hits}
-    ranked = sorted(merged.values(), key=lambda p: PLACE_GRAIN.get(p["name"], 3))
+    merged = {
+        p["name"]: p for p in lead_hits + body_hits if p["name"] not in NEWSROOM
+    }
+    ranked = sorted(merged.values(), key=lambda p: place_grain(p["name"]))
     return ranked[:5]
 
 
@@ -652,6 +703,8 @@ CAPITALS = {
 }
 # US towns share these names; do not pin industrial accidents on the European city.
 AMBIGUOUS_CAPITALS = {"Rome", "Paris", "Moscow", "London"}
+# Where the reporter sits, not where the event is — keep if the title names them.
+NEWSROOM = {"New York", "London", "Geneva", "Washington", "Paris", "Brussels"}
 
 
 def place_record(name: str) -> dict:
@@ -659,13 +712,17 @@ def place_record(name: str) -> dict:
     return with_coords({"name": canon, "lat": lat, "lng": lng, "region": region})
 
 
-def is_coarse(place: dict | None) -> bool:
+def is_coarse(place: dict | None, hazard: str | None = None) -> bool:
     if not place:
         return True
     name = place["name"]
     if name in CAPITALS:
         return True
-    if PLACE_GRAIN.get(name, 3) >= 3:
+    grain = place_grain(name)
+    if grain >= 3:
+        return True
+    # Technogenic events belong on the plant or town, not a state centroid.
+    if hazard == "technogenic" and grain >= 2:
         return True
     return False
 
@@ -963,7 +1020,8 @@ def main() -> None:
             places = [one] if one else []
         places = [
             p for p in places
-            if not is_coarse(p) or (tech and p["name"] in CAPITALS and p["name"] not in AMBIGUOUS_CAPITALS)
+            if not is_coarse(p, hazard=a.get("hazard"))
+            or (tech and p["name"] in CAPITALS and p["name"] not in AMBIGUOUS_CAPITALS)
         ]
         if not places:
             skipped += 1
