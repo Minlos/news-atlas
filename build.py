@@ -232,8 +232,6 @@ HAZARDS = [
     ("volcano", re.compile(r"\bvolcanos?\b|\bvolcanoes?\b|\beruptions?\b|\bизвержен\w*", re.I)),
     ("landslide", re.compile(r"\blandslides?\b|\bmudslides?\b|\bоползн\w*", re.I)),
     ("tsunami", re.compile(r"\btsunamis?\b|\bцунами\b", re.I)),
-    ("drought", re.compile(r"\bdroughts?\b|\bзасух\w*", re.I)),
-    ("heatwave", re.compile(r"\bheatwaves?\b|\bheat waves?\b|\bжара\b", re.I)),
     ("avalanche", re.compile(r"\bavalanches?\b|\bлавин\w*", re.I)),
 ]
 
@@ -246,10 +244,29 @@ HAZARD_COLOR = {
     "volcano": "#c45a3a",
     "landslide": "#9b8a6a",
     "tsunami": "#4a7a8c",
-    "drought": "#d4b483",
-    "heatwave": "#d49a5a",
     "avalanche": "#c4d0d8",
 }
+
+REJECT = re.compile(
+    r"\belections?\b|\bfar-right\b|\bparliament\b|\bsentenced\b|\btrial\b|\bjury\b|"
+    r"\bhostilit\w*|\bairstrikes?\b|\bceasefire\b|\benvoys?\b|\bsanctions\b|"
+    r"\bprotesters?\b|\bvoted to\b|\bprotection cluster\b|\bweekly situation\b|"
+    r"\brevealed:\b|\blessons learned\b|\breview [–-]\b|\bhere are some other\b|"
+    r"\bextraordinary rescues\b|\bcompanies\b.{0,40}\bwater\b|\bwar in\b|"
+    r"\btroops\b|\barmed conflict\b|\bPM says\b",
+    re.I,
+)
+
+HAPPENING = re.compile(
+    r"\brescued?\b|\bkilled\b|\bdead\b|\bdeaths?\b|\bdeath toll\b|\bmissing\b|"
+    r"\bevacuat\w*|\bstranded\b|\braging\b|\bflooded\b|\bflash floods?\b|"
+    r"\bcollapsed\b|\btrapped\b|\bdestroyed\b|\bwash(?:ed)? away\b|"
+    r"\baftershocks?\b|\blandfall\b|\berupt\w*|\bhaze\b|\bwildfires?\b|"
+    r"\bbushfires?\b|\btunnel\b|\bdisplaced\b|\bdamaged?\b|\bhit by\b|"
+    r"\brescue\b|\bsurvivors?\b|\bwarning\b|\balert\b|"
+    r"\bcyclones?\b|\btyphoons?\b|\bhurricanes?\b|\bearthquakes?\b",
+    re.I,
+)
 
 
 def classify_hazard(text: str) -> str | None:
@@ -257,6 +274,15 @@ def classify_hazard(text: str) -> str | None:
         if rx.search(text or ""):
             return name
     return None
+
+
+def is_happening(title: str, summary: str) -> bool:
+    text = f"{title} {summary}"
+    if REJECT.search(text):
+        return False
+    if not HAPPENING.search(text):
+        return False
+    return True
 
 PLACE_BY_NAME = {n.lower(): (n, lat, lng, region) for n, lat, lng, region in PLACES}
 PLACE_NAMES = sorted(PLACE_BY_NAME, key=len, reverse=True)
@@ -459,7 +485,7 @@ HTML = """<!DOCTYPE html>
   <div id="map"></div>
   <aside class="panel">
     <h1>Disaster atlas</h1>
-    <p class="sub"><span class="count" id="count"></span> natural-disaster stories in the last 7 days (forest fires, floods, quakes, storms). Pins are story groups.</p>
+    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms. Last 7 days. Politics and explainers stay off.</p>
     <label for="hazard">Hazard</label>
     <select id="hazard"></select>
     <label for="region">Region</label>
@@ -563,7 +589,7 @@ def main() -> None:
             continue
         text = a["title"] + " " + a["summary"]
         hazard = classify_hazard(text)
-        if not hazard:
+        if not hazard or not is_happening(a["title"], a["summary"]):
             continue
         a["hazard"] = hazard
         a["today"] = bool(a["when"] and a["when"].date() == TODAY)
