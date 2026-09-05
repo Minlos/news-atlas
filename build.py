@@ -19,6 +19,7 @@ WINDOW_DAYS = 7
 UA = "news-atlas/0.1 (personal map; +https://github.com/Minlos)"
 FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+    ("BBC Asia", "https://feeds.bbci.co.uk/news/world/asia/rss.xml"),
     ("The Guardian", "https://www.theguardian.com/world/rss"),
     ("Guardian environment", "https://www.theguardian.com/environment/rss"),
     ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
@@ -26,7 +27,13 @@ FEEDS = [
     ("NYT World", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"),
     ("France 24", "https://www.france24.com/en/rss"),
     ("DW", "https://rss.dw.com/rdf/rss-en-world"),
-    ("ReliefWeb", "https://reliefweb.int/updates/rss.xml?disaster_type[]=wild-fire&disaster_type[]=flood&disaster_type[]=earthquake&disaster_type[]=tropical-cyclone&disaster_type[]=land-slide&disaster_type[]=volcano&disaster_type[]=drought&disaster_type[]=tsunami"),
+    ("ABC Australia", "https://www.abc.net.au/news/feed/51120/rss.xml"),
+    ("The Hindu", "https://www.thehindu.com/news/international/feeder/default.rss"),
+    ("Kathmandu Post", "https://kathmandupost.com/rss"),
+    ("Floodlist", "https://floodlist.com/feed"),
+    ("ReliefWeb", "https://reliefweb.int/updates/rss.xml?disaster_type[]=wild-fire&disaster_type[]=flood&disaster_type[]=earthquake&disaster_type[]=tropical-cyclone&disaster_type[]=land-slide&disaster_type[]=volcano&disaster_type[]=tsunami"),
+    ("Google News", "https://news.google.com/rss/search?q=flood%20OR%20wildfire%20OR%20earthquake%20OR%20hurricane%20OR%20typhoon%20OR%20landslide%20when:7d&hl=en-US&gl=US&ceid=US:en"),
+    ("Google wildfires", "https://news.google.com/rss/search?q=wildfire%20OR%20bushfire%20OR%20%22forest%20fire%22%20OR%20%22fires%20rage%22%20OR%20%22acres%20burned%22%20when:7d&hl=en-US&gl=US&ceid=US:en"),
 ]
 
 # City first, then country. Longer names win via sorted match.
@@ -166,6 +173,19 @@ PLACES = [
     ("El Salvador", 13.7942, -88.8965, "Americas"),
     ("Libya", 32.8872, 13.1913, "Middle East"),
     ("Siberia", 60.0000, 100.0000, "Asia"),
+    ("Amazon", -3.4653, -62.2159, "Americas"),
+    ("Oregon", 43.8041, -120.5542, "Americas"),
+    ("Montana", 46.8797, -110.3626, "Americas"),
+    ("Idaho", 44.0682, -114.7420, "Americas"),
+    ("Yukon", 64.2823, -135.0000, "Americas"),
+    ("Saskatchewan", 52.9399, -106.4509, "Americas"),
+    ("Texas", 31.9686, -99.9018, "Americas"),
+    ("Nebraska", 41.4925, -99.9018, "Americas"),
+    ("Colorado", 39.5501, -105.7821, "Americas"),
+    ("Arkansas", 35.2010, -91.8318, "Americas"),
+    ("Yosemite", 37.8651, -119.5383, "Americas"),
+    ("Mariposa", 37.4849, -119.9663, "Americas"),
+    ("Algeria", 36.7538, 3.0588, "Africa"),
     ("Sumatra", 0.5897, 101.3431, "Asia"),
     ("Luzon", 16.0000, 121.0000, "Asia"),
     ("United States", 38.9072, -77.0369, "Americas"),
@@ -244,6 +264,11 @@ STOP = {
 HAZARDS = [
     ("wildfire", re.compile(
         r"\bwildfires?\b|\bbushfires?\b|\bforest fires?\b|\bwild fire\b|"
+        r"\bpeat fires?\b|\bgrass fires?\b|\bbrush fires?\b|"
+        r"\b(acres|hectares)\s+burned\b|"
+        r"\bfires?\s+(?:rage|raging|spread|spreading|burn|burning|engulf)|"
+        r"\b(?:rage|raging|spread|burning)\s+fires?\b|"
+        r"\bblaze\b.{0,40}\b(?:forest|bush|wild)|"
         r"\bлесн\w{0,10}\s+пожар\w*|\bпожар\w*\s+в\s+лес\w*", re.I)),
     ("flood", re.compile(
         r"\bfloods?\b|\bflooding\b|\bflooded\b|\bflash floods?\b|"
@@ -280,7 +305,10 @@ REJECT = re.compile(
     r"\brevealed:\b|\blessons learned\b|\breview [–-]\b|\bhere are some other\b|"
     r"\bextraordinary rescues\b|\bcompanies\b.{0,40}\bwater\b|\bwar in\b|"
     r"\btroops\b|\barmed conflict\b|\bPM says\b|"
-    r"\bwhat we know about the link\b|\bclimate crisis\b",
+    r"\bwhat we know about the link\b|\bclimate crisis\b|"
+    r"\bliability\b|\bPG&E\b|\bState Farm\b|"
+    r"\bwildfire (?:bill|reform|deal|costs?|plan|claims?)\b|"
+    r"\blegislat(?:e|ure|ive)\b",
     re.I,
 )
 
@@ -307,9 +335,9 @@ def is_happening(title: str, summary: str) -> bool:
     text = f"{title} {summary}"
     if REJECT.search(text):
         return False
-    if not HAPPENING.search(text):
-        return False
-    return True
+    if classify_hazard(text):
+        return True
+    return bool(HAPPENING.search(text))
 
 PLACE_BY_NAME = {n.lower(): (n, lat, lng, region) for n, lat, lng, region in PLACES}
 PLACE_NAMES = sorted(PLACE_BY_NAME, key=len, reverse=True)
@@ -323,6 +351,9 @@ PLACE_GRAIN = {
     "Rasuwa": 2, "Nuwakot": 2, "Dhading": 2, "Chitwan": 2, "Gorkha": 2,
     "Tanahu": 2, "Sindhupalchok": 2, "Nepal": 3,
     "Sumatra": 2, "Luzon": 2, "Hawaii": 2, "California": 2,
+    "Amazon": 2, "Oregon": 2, "Montana": 2, "Idaho": 2, "Yukon": 2, "Saskatchewan": 2,
+    "Texas": 2, "Nebraska": 2, "Colorado": 2, "Arkansas": 2, "Yosemite": 1, "Mariposa": 1,
+    "Algeria": 2,
 }
 NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
 
@@ -435,11 +466,15 @@ def parse_feed(blob: bytes, source: str) -> list[dict]:
         summary = re.sub(r"\s+", " ", summary).strip()[:2000]
         pub = parse_date(item_text(el, ["pubDate", "date", "published", "updated"]))
         out.append({"title": title, "link": link, "summary": summary, "source": source, "when": pub})
+        if len(out) >= 80:
+            break
     return out
 
 
 def article_text(url: str) -> str:
     if not url or not url.startswith("http"):
+        return ""
+    if "news.google.com" in url:
         return ""
     blob = fetch(url)
     if not blob:
@@ -706,7 +741,7 @@ HTML = """<!DOCTYPE html>
     const TODAY = __TODAY__;
     const CLUSTERS = __CLUSTERS__;
     const HAZARD_COLOR = __HAZARD_COLOR__;
-    const map = L.map("map", { zoomControl: true, minZoom: 2 }).setView([28.1, 85.3], 8);
+    const map = L.map("map", { zoomControl: true, minZoom: 2 }).setView([20, 15], 2);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
       attribution: "Tiles &copy; Esri · wires + ReliefWeb",
       maxZoom: 19
@@ -768,6 +803,9 @@ HTML = """<!DOCTYPE html>
     document.getElementById("americas").onclick = function () { map.setView([15, -80], 3); };
     placesFor();
     render();
+    if (CLUSTERS.length) {
+      map.fitBounds(CLUSTERS.map(c => [c.lat, c.lng]), { padding: [40, 40], maxZoom: 4 });
+    }
   </script>
 </body>
 </html>
