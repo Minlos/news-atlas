@@ -12,6 +12,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 TODAY = datetime.now(timezone.utc).date()
 WINDOW_DAYS = 7
@@ -612,10 +613,11 @@ def main() -> None:
     out = HTML.replace("__TODAY__", json.dumps(TODAY.isoformat()))
     out = out.replace("__CLUSTERS__", json.dumps(clusters, ensure_ascii=False))
     out = out.replace("__HAZARD_COLOR__", json.dumps(HAZARD_COLOR))
-    path = "/Users/minlos/Downloads/news-atlas/news-map.html"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(out)
-    print(f"wrote {path}")
+    root = Path(__file__).resolve().parent
+    for name in ("news-map.html", "index.html"):
+        path = root / name
+        path.write_text(out, encoding="utf-8")
+        print(f"wrote {path}")
 
 
 if __name__ == "__main__":
