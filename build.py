@@ -15,7 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 TODAY = datetime.now(timezone.utc).date()
-WINDOW_DAYS = 7
+WINDOW_DAYS = 14
+AFTER = (TODAY - timedelta(days=WINDOW_DAYS)).isoformat()
 UA = "news-atlas/0.1 (personal map; +https://github.com/Minlos)"
 FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
@@ -32,8 +33,8 @@ FEEDS = [
     ("Kathmandu Post", "https://kathmandupost.com/rss"),
     ("Floodlist", "https://floodlist.com/feed"),
     ("ReliefWeb", "https://reliefweb.int/updates/rss.xml?disaster_type[]=wild-fire&disaster_type[]=flood&disaster_type[]=earthquake&disaster_type[]=tropical-cyclone&disaster_type[]=land-slide&disaster_type[]=volcano&disaster_type[]=tsunami"),
-    ("Google News", "https://news.google.com/rss/search?q=flood%20OR%20wildfire%20OR%20earthquake%20OR%20hurricane%20OR%20typhoon%20OR%20landslide%20when:7d&hl=en-US&gl=US&ceid=US:en"),
-    ("Google wildfires", "https://news.google.com/rss/search?q=wildfire%20OR%20bushfire%20OR%20%22forest%20fire%22%20OR%20%22fires%20rage%22%20OR%20%22acres%20burned%22%20when:7d&hl=en-US&gl=US&ceid=US:en"),
+    ("Google News", f"https://news.google.com/rss/search?q=flood%20OR%20wildfire%20OR%20earthquake%20OR%20hurricane%20OR%20typhoon%20OR%20landslide%20after:{AFTER}&hl=en-US&gl=US&ceid=US:en"),
+    ("Google wildfires", f"https://news.google.com/rss/search?q=wildfire%20OR%20bushfire%20OR%20%22forest%20fire%22%20OR%20%22fires%20rage%22%20OR%20%22acres%20burned%22%20after:{AFTER}&hl=en-US&gl=US&ceid=US:en"),
 ]
 
 # City first, then country. Longer names win via sorted match.
@@ -466,7 +467,7 @@ def parse_feed(blob: bytes, source: str) -> list[dict]:
         summary = re.sub(r"\s+", " ", summary).strip()[:2000]
         pub = parse_date(item_text(el, ["pubDate", "date", "published", "updated"]))
         out.append({"title": title, "link": link, "summary": summary, "source": source, "when": pub})
-        if len(out) >= 80:
+        if len(out) >= 100:
             break
     return out
 
@@ -722,7 +723,7 @@ HTML = """<!DOCTYPE html>
   <div id="map"></div>
   <aside class="panel">
     <h1>Disaster atlas</h1>
-    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms. Last 7 days. Politics and explainers stay off.</p>
+    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms. Last __WINDOW__ days. Politics and explainers stay off.</p>
     <label for="hazard">Hazard</label>
     <select id="hazard"></select>
     <label for="region">Region</label>
@@ -897,6 +898,7 @@ def main() -> None:
     print(f"clusters {len(clusters)}")
 
     out = HTML.replace("__TODAY__", json.dumps(TODAY.isoformat()))
+    out = out.replace("__WINDOW__", str(WINDOW_DAYS))
     out = out.replace("__CLUSTERS__", json.dumps(clusters, ensure_ascii=False))
     out = out.replace("__HAZARD_COLOR__", json.dumps(HAZARD_COLOR))
     root = Path(__file__).resolve().parent
