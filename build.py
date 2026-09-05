@@ -158,6 +158,8 @@ PLACES = [
     ("El Salvador", 13.7942, -88.8965, "Americas"),
     ("Libya", 32.8872, 13.1913, "Middle East"),
     ("Siberia", 60.0000, 100.0000, "Asia"),
+    ("Sumatra", 0.5897, 101.3431, "Asia"),
+    ("Luzon", 16.0000, 121.0000, "Asia"),
     ("United States", 38.9072, -77.0369, "Americas"),
     ("America", 38.9072, -77.0369, "Americas"),
     ("Canada", 45.4215, -75.6972, "Americas"),
@@ -310,6 +312,7 @@ PLACE_GRAIN = {
     "Lende Khola": 0, "Timure": 1, "Syabrubesi": 1, "Dhunche": 1,
     "Bidur": 1, "Trishuli": 1, "Kathmandu": 1, "Rasuwa": 2, "Nuwakot": 2,
     "Dhading": 2, "Chitwan": 2, "Gorkha": 2, "Tanahu": 2, "Nepal": 3,
+    "Sumatra": 2, "Luzon": 2, "Hawaii": 2, "California": 2,
 }
 NEPAL_FINE = {n for n, g in PLACE_GRAIN.items() if n != "Nepal"}
 PLACE_ALIASES = [
@@ -439,6 +442,61 @@ def locate_article(title: str, summary: str, body: str) -> dict | None:
         if PLACE_GRAIN.get(hit["name"], 3) <= 2:
             return hit
     return best
+
+
+CAPITALS = {
+    "Kathmandu", "Washington", "London", "Paris", "Berlin", "Moscow", "New Delhi",
+    "Delhi", "Beijing", "Jakarta", "Manila", "Tokyo", "Islamabad", "Cairo", "Riyadh",
+    "Ankara", "Rome", "Madrid", "Brussels",
+}
+
+
+def place_record(name: str) -> dict:
+    canon, lat, lng, region = PLACE_BY_NAME[name.lower()]
+    return {"name": canon, "lat": lat, "lng": lng, "region": region}
+
+
+def is_coarse(place: dict | None) -> bool:
+    if not place:
+        return True
+    name = place["name"]
+    if name in CAPITALS:
+        return True
+    if PLACE_GRAIN.get(name, 3) >= 3:
+        return True
+    return False
+
+
+def refine_place(article: dict, place: dict | None) -> dict | None:
+    """Do not leave events on a capital or country centroid."""
+    text = f"{article['title']} {article['summary']}".lower()
+    name = place["name"] if place else ""
+    nepalish = "nepal" in text or name in NEPAL_FINE or name in {"Nepal", "Kathmandu"}
+    if nepalish:
+        if re.search(r"\btunnel|\btrishuli", text):
+            if re.search(r"trishuli river", text):
+                return place_record("Trishuli River")
+            return place_record("Trishuli 3A")
+        if re.search(r"tibet|rasuwagadhi|border", text):
+            return place_record("Nepal-Tibet border")
+        if re.search(r"\brasuwa\b", text):
+            return place_record("Rasuwa")
+        if re.search(r"\bnuwakot\b", text):
+            return place_record("Nuwakot")
+        if re.search(r"\bdhading\b", text):
+            return place_record("Dhading")
+        if article.get("hazard") == "flood" and is_coarse(place):
+            return place_record("Rasuwa")
+        if is_coarse(place):
+            return None
+        return place
+    if is_coarse(place) and article.get("hazard") == "wildfire" and re.search(r"indonesia|sumatra|kalimantan", text):
+        return place_record("Sumatra")
+    if is_coarse(place) and article.get("hazard") == "cyclone" and re.search(r"philippines|luzon|monsoon", text):
+        return place_record("Luzon")
+    if is_coarse(place):
+        return None
+    return place
 
 
 def tokens(title: str) -> set[str]:
@@ -671,6 +729,7 @@ def main() -> None:
     for a in disasters:
         extra = article_text(a["link"])
         place = locate_article(a["title"], a["summary"], extra)
+        place = refine_place(a, place)
         if not place:
             skipped += 1
             print(f"  no place | {a['title'][:70]}")
