@@ -818,32 +818,6 @@ def load_dotenv() -> None:
         os.environ.setdefault(key.strip(), val.strip().strip("'").strip('"'))
 
 
-def llm_state_path() -> Path:
-    folder = Path(__file__).resolve().parent / "state"
-    folder.mkdir(exist_ok=True)
-    return folder / "llm-day.json"
-
-
-def llm_used_today() -> dict | None:
-    path = llm_state_path()
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    if data.get("date") == TODAY.isoformat():
-        return data
-    return None
-
-
-def save_llm_day(title: str, names: list[str]) -> None:
-    llm_state_path().write_text(
-        json.dumps({"date": TODAY.isoformat(), "title": title, "places": names}, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-
 def parse_place_list(raw: str) -> list[str]:
     try:
         obj = json.loads(raw)
@@ -873,6 +847,7 @@ def xai_extract(title: str, summary: str, body: str) -> list[str]:
     payload = {
         "model": XAI_MODEL,
         "temperature": 0,
+        "response_format": {"type": "json_object"},
         "messages": [
             {
                 "role": "system",
@@ -897,7 +872,7 @@ def xai_extract(title: str, summary: str, body: str) -> list[str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=25) as r:
             data = json.loads(r.read().decode("utf-8", "ignore"))
     except Exception as e:
         print(f"  xai fail: {e}")
@@ -974,26 +949,6 @@ def pin_from_names(names: list[str], article: dict, existing: list[dict]) -> lis
         return existing
     merged = {p["name"]: p for p in found + existing}
     return list(merged.values())
-
-
-def pick_one_for_llm(rows: list[dict]) -> dict | None:
-    def need(row: dict) -> bool:
-        places = row["places"]
-        if not places:
-            return True
-        return min(place_grain(p["name"]) for p in places) >= 2
-
-    def score(row: dict) -> tuple:
-        places = row["places"]
-        grain = 9 if not places else min(place_grain(p["name"]) for p in places)
-        return (1 if row["article"].get("today") else 0, grain, len(row["article"]["title"]))
-
-    pool = [row for row in rows if need(row)]
-    today = [row for row in pool if row["article"].get("today")]
-    pick_from = today or pool
-    if not pick_from:
-        return None
-    return max(pick_from, key=score)
 
 
 def locate_hits(text: str, allow_capitals: bool = False) -> list[dict]:
@@ -1381,25 +1336,24 @@ def main() -> None:
         ]
         rows.append({"article": a, "extra": extra, "places": places})
 
-    already = llm_used_today()
-    if already:
-        print(f"llm 1/day already used on: {already.get('title', '')[:70]}")
-    elif not xai_key() and not ollama_on():
-        print("llm off (no XAI_API_KEY, ollama not running)")
+    llm_n = 0
+    if not xai_key() and not ollama_on():
+        print("llm off (no XAI_API_KEY)")
     else:
-        target = pick_one_for_llm(rows)
-        if not target:
-            print("llm 1/day: nothing coarse enough to ask")
-        else:
-            a = target["article"]
-            print(f"llm 1/day parse: {a['title'][:70]}")
-            names = llm_extract(a["title"], a["summary"], target["extra"])
-            save_llm_day(a["title"], names)
-            if names:
-                target["places"] = pin_from_names(names, a, target["places"])
-                print(f"  llm {', '.join(names)[:50]} -> {', '.join(p['name'] for p in target['places']) or 'no pin'}")
-            else:
-                print("  llm returned no places")
+        who = f"xai {XAI_MODEL}" if xai_key() else f"ollama {OLLAMA_MODEL}"
+        print(f"llm extract places via {who} on {len(rows)} disasters")
+        for row in rows:
+            a = row["article"]
+            llm_n += 1
+            names = llm_extract(a["title"], a["summary"], row["extra"])
+            if not names:
+                continue
+            before = [p["name"] for p in row["places"]]
+            row["places"] = pin_from_names(names, a, row["places"])
+            after = [p["name"] for p in row["places"]]
+            if after != before:
+                print(f"  llm {a['title'][:42]:42} {names} -> {after}")
+        print(f"llm place-extract {llm_n}")
 
     located = []
     skipped = 0
