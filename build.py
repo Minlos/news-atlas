@@ -807,6 +807,16 @@ def article_text(url: str) -> str:
 
 
 def load_dotenv() -> None:
+    grok = Path.home() / "grok_api"
+    if grok.is_file():
+        raw = grok.read_text(encoding="utf-8").strip()
+        if raw.startswith("xai-"):
+            os.environ["XAI_API_KEY"] = raw.splitlines()[0].strip()
+        elif "=" in raw:
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("XAI_API_KEY="):
+                    os.environ["XAI_API_KEY"] = line.split("=", 1)[1].strip().strip("'").strip('"')
     path = Path(__file__).resolve().parent / ".env"
     if not path.is_file():
         return
