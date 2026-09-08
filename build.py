@@ -19,6 +19,10 @@ TODAY = datetime.now(timezone.utc).date()
 WINDOW_DAYS = 14
 AFTER = (TODAY - timedelta(days=WINDOW_DAYS)).isoformat()
 UA = "news-atlas/0.1 (personal map; +https://minlos.site/news)"
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "off").rstrip("/")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:12b")
+XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.6")
+XAI_URL = "https://api.x.ai/v1/chat/completions"
 FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
     ("BBC Asia", "https://feeds.bbci.co.uk/news/world/asia/rss.xml"),
@@ -802,6 +806,196 @@ def article_text(url: str) -> str:
     return re.sub(r"\s+", " ", raw).strip()[:8000]
 
 
+def load_dotenv() -> None:
+    path = Path(__file__).resolve().parent / ".env"
+    if not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        os.environ.setdefault(key.strip(), val.strip().strip("'").strip('"'))
+
+
+def llm_state_path() -> Path:
+    folder = Path(__file__).resolve().parent / "state"
+    folder.mkdir(exist_ok=True)
+    return folder / "llm-day.json"
+
+
+def llm_used_today() -> dict | None:
+    path = llm_state_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if data.get("date") == TODAY.isoformat():
+        return data
+    return None
+
+
+def save_llm_day(title: str, names: list[str]) -> None:
+    llm_state_path().write_text(
+        json.dumps({"date": TODAY.isoformat(), "title": title, "places": names}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def parse_place_list(raw: str) -> list[str]:
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return []
+    places = obj.get("places") if isinstance(obj, dict) else obj
+    if not isinstance(places, list):
+        return []
+    out = []
+    for item in places:
+        if isinstance(item, str) and item.strip():
+            out.append(item.strip())
+        elif isinstance(item, dict) and item.get("name"):
+            out.append(str(item["name"]).strip())
+    return out[:5]
+
+
+def xai_key() -> str:
+    return (os.environ.get("XAI_API_KEY") or "").strip()
+
+
+def xai_extract(title: str, summary: str, body: str) -> list[str]:
+    key = xai_key()
+    if not key:
+        return []
+    text = f"{title}\n{summary}\n{(body or '')[:1500]}".strip()
+    payload = {
+        "model": XAI_MODEL,
+        "temperature": 0,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Extract WHERE a natural or industrial disaster is happening. "
+                    "Ignore newsrooms, bylines, and cities named only because officials spoke there. "
+                    "Prefer the most specific named site: plant, mine, village, district, island. "
+                    "JSON only: {\"places\": [\"...\"]} with 1-5 names. Empty list if none."
+                ),
+            },
+            {"role": "user", "content": text},
+        ],
+    }
+    req = urllib.request.Request(
+        XAI_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + key,
+            "User-Agent": UA,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read().decode("utf-8", "ignore"))
+    except Exception as e:
+        print(f"  xai fail: {e}")
+        return []
+    raw = (((data.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+    return parse_place_list(raw)
+
+
+def ollama_on() -> bool:
+    if not OLLAMA_HOST or OLLAMA_HOST in {"off", "0", "none"}:
+        return False
+    try:
+        req = urllib.request.Request(OLLAMA_HOST + "/api/tags", headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def ollama_extract(title: str, summary: str, body: str) -> list[str]:
+    text = f"{title}\n{summary}\n{(body or '')[:1500]}".strip()
+    payload = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        "format": "json",
+        "think": False,
+        "options": {"temperature": 0, "num_predict": 160},
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Extract WHERE a natural or industrial disaster is happening. "
+                    "Ignore newsrooms, bylines, and cities named only because officials spoke there. "
+                    "Prefer the most specific named site: plant, mine, village, district, island. "
+                    "JSON only: {\"places\": [\"...\"]} with 1-5 names. Empty list if none."
+                ),
+            },
+            {"role": "user", "content": text},
+        ],
+    }
+    req = urllib.request.Request(
+        OLLAMA_HOST + "/api/chat",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "User-Agent": UA},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as r:
+            data = json.loads(r.read().decode("utf-8", "ignore"))
+    except Exception as e:
+        print(f"  ollama fail: {e}")
+        return []
+    raw = (data.get("message") or {}).get("content") or ""
+    return parse_place_list(raw)
+
+
+def llm_extract(title: str, summary: str, body: str) -> list[str]:
+    if xai_key():
+        return xai_extract(title, summary, body)
+    if ollama_on():
+        return ollama_extract(title, summary, body)
+    return []
+
+
+def pin_from_names(names: list[str], article: dict, existing: list[dict]) -> list[dict]:
+    tech = article.get("hazard") == "technogenic"
+    found = locate_hits(" " + " ; ".join(names) + " " + article["title"], allow_capitals=tech)
+    found = [
+        p for p in found
+        if not is_coarse(p, hazard=article.get("hazard"))
+        or (tech and p["name"] in CAPITALS and p["name"] not in AMBIGUOUS_CAPITALS)
+    ]
+    if not found:
+        return existing
+    merged = {p["name"]: p for p in found + existing}
+    return list(merged.values())
+
+
+def pick_one_for_llm(rows: list[dict]) -> dict | None:
+    def need(row: dict) -> bool:
+        places = row["places"]
+        if not places:
+            return True
+        return min(place_grain(p["name"]) for p in places) >= 2
+
+    def score(row: dict) -> tuple:
+        places = row["places"]
+        grain = 9 if not places else min(place_grain(p["name"]) for p in places)
+        return (1 if row["article"].get("today") else 0, grain, len(row["article"]["title"]))
+
+    pool = [row for row in rows if need(row)]
+    today = [row for row in pool if row["article"].get("today")]
+    pick_from = today or pool
+    if not pick_from:
+        return None
+    return max(pick_from, key=score)
+
+
 def locate_hits(text: str, allow_capitals: bool = False) -> list[dict]:
     blob = " " + (text or "") + " "
     blob = re.sub(r"\bin Kathmandu\b", " ", blob, flags=re.I)
@@ -1146,6 +1340,7 @@ HTML = """<!DOCTYPE html>
 
 
 def main() -> None:
+    load_dotenv()
     print(f"today UTC {TODAY.isoformat()}")
     articles = []
     for name, url in FEEDS:
@@ -1171,8 +1366,7 @@ def main() -> None:
         disasters.append(a)
     print(f"disasters in {WINDOW_DAYS}d: {len(disasters)} (today {sum(1 for a in disasters if a['today'])})")
 
-    located = []
-    skipped = 0
+    rows = []
     for a in disasters:
         extra = article_text(a["link"])
         tech = a.get("hazard") == "technogenic"
@@ -1185,6 +1379,34 @@ def main() -> None:
             if not is_coarse(p, hazard=a.get("hazard"))
             or (tech and p["name"] in CAPITALS and p["name"] not in AMBIGUOUS_CAPITALS)
         ]
+        rows.append({"article": a, "extra": extra, "places": places})
+
+    already = llm_used_today()
+    if already:
+        print(f"llm 1/day already used on: {already.get('title', '')[:70]}")
+    elif not xai_key() and not ollama_on():
+        print("llm off (no XAI_API_KEY, ollama not running)")
+    else:
+        target = pick_one_for_llm(rows)
+        if not target:
+            print("llm 1/day: nothing coarse enough to ask")
+        else:
+            a = target["article"]
+            print(f"llm 1/day parse: {a['title'][:70]}")
+            names = llm_extract(a["title"], a["summary"], target["extra"])
+            save_llm_day(a["title"], names)
+            if names:
+                target["places"] = pin_from_names(names, a, target["places"])
+                print(f"  llm {', '.join(names)[:50]} -> {', '.join(p['name'] for p in target['places']) or 'no pin'}")
+            else:
+                print("  llm returned no places")
+
+    located = []
+    skipped = 0
+    for row in rows:
+        a = row["article"]
+        places = row["places"]
+        extra = row["extra"]
         if not places:
             skipped += 1
             print(f"  no place | {a['title'][:70]}")
