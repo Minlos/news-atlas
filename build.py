@@ -6,6 +6,7 @@ from __future__ import annotations
 import email.utils
 import html
 import json
+import os
 import re
 import ssl
 import urllib.request
@@ -17,7 +18,7 @@ from pathlib import Path
 TODAY = datetime.now(timezone.utc).date()
 WINDOW_DAYS = 14
 AFTER = (TODAY - timedelta(days=WINDOW_DAYS)).isoformat()
-UA = "news-atlas/0.1 (personal map; +https://github.com/Minlos)"
+UA = "news-atlas/0.1 (personal map; +https://minlos.site/news)"
 FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
     ("BBC Asia", "https://feeds.bbci.co.uk/news/world/asia/rss.xml"),
@@ -1237,10 +1238,13 @@ def main() -> None:
     out = out.replace("__WINDOW__", str(WINDOW_DAYS))
     out = out.replace("__CLUSTERS__", json.dumps(clusters, ensure_ascii=False))
     out = out.replace("__HAZARD_COLOR__", json.dumps(HAZARD_COLOR))
-    root = Path(__file__).resolve().parent
+    root = Path(os.environ.get("OUT_DIR") or Path(__file__).resolve().parent)
+    root.mkdir(parents=True, exist_ok=True)
     for name in ("news-map.html", "index.html"):
         path = root / name
-        path.write_text(out, encoding="utf-8")
+        tmp = root / (name + ".tmp")
+        tmp.write_text(out, encoding="utf-8")
+        tmp.replace(path)
         print(f"wrote {path}")
 
 
