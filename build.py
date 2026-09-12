@@ -9,6 +9,7 @@ import json
 import os
 import re
 import ssl
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
@@ -21,7 +22,7 @@ AFTER = (TODAY - timedelta(days=WINDOW_DAYS)).isoformat()
 UA = "news-atlas/0.1 (personal map; +https://minlos.site/news)"
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "off").rstrip("/")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma4:12b")
-XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.6")
+XAI_MODEL = os.environ.get("XAI_MODEL", "grok-4.3")
 XAI_URL = "https://api.x.ai/v1/chat/completions"
 FEEDS = [
     ("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
@@ -806,26 +807,31 @@ def article_text(url: str) -> str:
     return re.sub(r"\s+", " ", raw).strip()[:8000]
 
 
-def load_dotenv() -> None:
+def load_dotenv() -> str:
+    source = ""
     grok = Path.home() / "grok_api"
     if grok.is_file():
         raw = grok.read_text(encoding="utf-8").strip()
         if raw.startswith("xai-"):
             os.environ["XAI_API_KEY"] = raw.splitlines()[0].strip()
+            source = "grok_api"
         elif "=" in raw:
             for line in raw.splitlines():
                 line = line.strip()
                 if line.startswith("XAI_API_KEY="):
                     os.environ["XAI_API_KEY"] = line.split("=", 1)[1].strip().strip("'").strip('"')
+                    source = "grok_api"
     path = Path(__file__).resolve().parent / ".env"
-    if not path.is_file():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, val = line.split("=", 1)
-        os.environ.setdefault(key.strip(), val.strip().strip("'").strip('"'))
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            os.environ.setdefault(key.strip(), val.strip().strip("'").strip('"'))
+        if not source and (os.environ.get("XAI_API_KEY") or "").strip():
+            source = ".env"
+    return source or "none"
 
 
 def parse_place_list(raw: str) -> list[str]:
@@ -845,31 +851,64 @@ def parse_place_list(raw: str) -> list[str]:
     return out[:5]
 
 
+XAI_DISABLED = False
+XAI_BATCH = int(os.environ.get("XAI_BATCH", "8") or "8")
+XAI_DAILY_MAX = int(
+    os.environ.get("XAI_DAILY_MAX") or os.environ.get("XAI_MAX") or "24" or "24"
+)
+
+
+def xai_daily_path() -> Path:
+    return Path(__file__).resolve().parent / "logs" / "xai-daily.json"
+
+
+def xai_daily_used() -> int:
+    path = xai_daily_path()
+    if not path.is_file():
+        return 0
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+    if obj.get("date") != TODAY.isoformat():
+        return 0
+    try:
+        return int(obj.get("headlines") or 0)
+    except Exception:
+        return 0
+
+
+def xai_daily_add(n: int) -> int:
+    used = xai_daily_used() + n
+    path = xai_daily_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({
+            "date": TODAY.isoformat(),
+            "headlines": used,
+            "cap": XAI_DAILY_MAX,
+            "model": XAI_MODEL,
+        })
+        + "\n",
+        encoding="utf-8",
+    )
+    return used
+
+
 def xai_key() -> str:
     return (os.environ.get("XAI_API_KEY") or "").strip()
 
 
-def xai_extract(title: str, summary: str, body: str) -> list[str]:
+def xai_post(messages: list[dict], timeout: int = 40) -> dict | None:
+    global XAI_DISABLED
     key = xai_key()
-    if not key:
-        return []
-    text = f"{title}\n{summary}\n{(body or '')[:1500]}".strip()
+    if not key or XAI_DISABLED:
+        return None
     payload = {
         "model": XAI_MODEL,
         "temperature": 0,
         "response_format": {"type": "json_object"},
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Extract WHERE a natural or industrial disaster is happening. "
-                    "Ignore newsrooms, bylines, and cities named only because officials spoke there. "
-                    "Prefer the most specific named site: plant, mine, village, district, island. "
-                    "JSON only: {\"places\": [\"...\"]} with 1-5 names. Empty list if none."
-                ),
-            },
-            {"role": "user", "content": text},
-        ],
+        "messages": messages,
     }
     req = urllib.request.Request(
         XAI_URL,
@@ -882,13 +921,114 @@ def xai_extract(title: str, summary: str, body: str) -> list[str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=25) as r:
-            data = json.loads(r.read().decode("utf-8", "ignore"))
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8", "ignore"))
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", "ignore")
+        try:
+            err = json.loads(raw)
+            code = str(err.get("code") or "")
+            msg = str(err.get("error") or "")[:180]
+        except Exception:
+            code, msg = "", raw[:180]
+        print(f"  xai fail: {e.code} {code} {msg}", flush=True)
+        blob = f"{code} {msg}".lower()
+        if e.code in (401, 403) and any(
+            s in blob for s in ("credit", "spending", "permission-denied", "blocked")
+        ):
+            XAI_DISABLED = True
+            print("  xai off: credits or spending limit", flush=True)
+        return None
     except Exception as e:
-        print(f"  xai fail: {e}")
-        return []
-    raw = (((data.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
-    return parse_place_list(raw)
+        print(f"  xai fail: {e}", flush=True)
+        return None
+
+
+def xai_content(data: dict | None) -> str:
+    if not data:
+        return ""
+    return (((data.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
+
+
+def xai_extract(title: str, summary: str, body: str) -> list[str]:
+    data = xai_post(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Extract WHERE a natural or industrial disaster is happening. "
+                    "Ignore newsrooms, bylines, and cities named only because officials spoke there. "
+                    "Prefer the most specific named site: plant, mine, village, district, island. "
+                    "JSON only: {\"places\": [\"...\"]} with 1-5 names. Empty list if none."
+                ),
+            },
+            {"role": "user", "content": f"{title}\n{summary}\n{(body or '')[:1500]}".strip()},
+        ]
+    )
+    return parse_place_list(xai_content(data))
+
+
+def parse_batch_items(raw: str, ids: list[int]) -> dict[int, list[str]]:
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return {}
+    found: dict[int, list[str]] = {}
+
+    def take(i: object, places_obj: object) -> None:
+        try:
+            n = int(i)
+        except Exception:
+            return
+        wrapped = {"places": places_obj} if not isinstance(places_obj, dict) else places_obj
+        found[n] = parse_place_list(json.dumps(wrapped))
+
+    if isinstance(obj, dict) and isinstance(obj.get("items"), list):
+        for item in obj["items"]:
+            if isinstance(item, dict):
+                take(item.get("id", item.get("i")), item.get("places") or [])
+    elif isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, dict):
+                take(item.get("id", item.get("i")), item.get("places") or [])
+    elif isinstance(obj, dict) and "places" in obj and len(ids) == 1:
+        take(ids[0], obj.get("places") or [])
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in {"items", "places"}:
+                continue
+            take(k, v)
+    return {i: found[i] for i in ids if i in found}
+
+
+def xai_extract_batch(rows: list[dict]) -> dict[int, list[str]]:
+    if not rows:
+        return {}
+    chunks = []
+    for i, row in enumerate(rows, start=1):
+        a = row["article"]
+        body = (row.get("extra") or "")[:700]
+        chunks.append(
+            f"{i}. [{a.get('hazard')}] {a['title']}\n{a.get('summary') or ''}\n{body}".strip()
+        )
+    data = xai_post(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "Each numbered story is a disaster. For each id, extract WHERE it is happening. "
+                    "Ignore newsrooms and bylines. Prefer plant, mine, village, district, island. "
+                    'JSON only: {"items":[{"id":1,"places":["..."]}, ...]} with 1-5 names per story. '
+                    "Use the same ids. Empty places if none."
+                ),
+            },
+            {"role": "user", "content": "\n\n".join(chunks)},
+        ],
+        timeout=90,
+    )
+    ids = list(range(1, len(rows) + 1))
+    parsed = parse_batch_items(xai_content(data), ids)
+    return {i - 1: parsed[i] for i in parsed}
 
 
 def ollama_on() -> bool:
@@ -1150,6 +1290,228 @@ def cluster_title(members: list[dict]) -> str:
     return members[0]["title"]
 
 
+def cluster_located(located: list[dict]) -> list[dict]:
+    by_place: dict[tuple[str, str], list] = defaultdict(list)
+    for a in located:
+        for p in a["places"]:
+            by_place[(p["name"], a["hazard"])].append((a, p))
+    clusters = []
+    for (_name, _hazard), pairs in by_place.items():
+        members = [a for a, _ in pairs]
+        place = pairs[0][1]
+        seen = set()
+        uniq = []
+        for m in members:
+            key = re.sub(r"\W+", "", m["title"].lower())[:80]
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append({
+                "title": html.escape(m["title"]),
+                "link": m["link"],
+                "source": html.escape(m["source"]),
+                "today": m["today"],
+                "places": [html.escape(p["name"]) for p in m["places"]],
+                "snippet": html.escape(m.get("snippet") or ""),
+            })
+        hazards = Counter(m["hazard"] for m in members)
+        clusters.append({
+            "title": cluster_title(members),
+            "place": place["name"],
+            "lat": place["lat"],
+            "lng": place["lng"],
+            "region": place["region"],
+            "hazard": hazards.most_common(1)[0][0],
+            "articles": uniq,
+        })
+    clusters.sort(key=lambda c: (-len(c["articles"]), c["place"]))
+    return clusters
+
+
+def materialize(rows: list[dict], key: str) -> tuple[list[dict], int]:
+    located = []
+    skipped = 0
+    for row in rows:
+        a = row["article"]
+        places = row.get(key) or []
+        if not places:
+            skipped += 1
+            continue
+        names = [p["name"] for p in places]
+        extra = row.get("extra") or ""
+        located.append({
+            "title": a["title"],
+            "link": a["link"],
+            "source": a["source"],
+            "today": a["today"],
+            "hazard": a["hazard"],
+            "places": places,
+            "place": places[0],
+            "snippet": mention_snippet(
+                a["title"] + ". " + a["summary"] + " " + extra, names
+            ),
+        })
+    return cluster_located(located), skipped
+
+
+def pin_diff_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    diffs = []
+    missing = []
+    for row in rows:
+        a = row["article"]
+        gaz = [p["name"] for p in row.get("gazetteer") or []]
+        grok = [p["name"] for p in row.get("places") or []]
+        rec = {
+            "title": a["title"],
+            "link": a["link"],
+            "hazard": a.get("hazard") or "",
+            "gazetteer": gaz,
+            "grok": grok,
+        }
+        if not gaz and not grok:
+            missing.append(rec)
+        elif gaz != grok:
+            diffs.append(rec)
+    return diffs, missing
+
+
+def write_compare(
+    root: Path,
+    *,
+    api_note: str,
+    gaz_clusters: list[dict],
+    gaz_skip: int,
+    grok_clusters: list[dict],
+    grok_skip: int,
+    n_rows: int,
+    diffs: list[dict],
+    missing: list[dict],
+    llm_n: int,
+) -> None:
+    def names(xs: list[str]) -> str:
+        return ", ".join(html.escape(x) for x in xs) or "—"
+
+    def nloc(skip: int) -> int:
+        return n_rows - skip
+
+    rescued = sum(1 for d in diffs if not d["gazetteer"] and d["grok"])
+    rows_html = []
+    for d in diffs:
+        kind = "new pin" if not d["gazetteer"] and d["grok"] else "changed"
+        rows_html.append(
+            "<tr><td>"
+            + html.escape(d["hazard"])
+            + '</td><td><a href="'
+            + html.escape(d["link"], quote=True)
+            + '">'
+            + html.escape(d["title"][:110])
+            + "</a></td><td>"
+            + names(d["gazetteer"])
+            + "</td><td>"
+            + names(d["grok"])
+            + "</td><td>"
+            + kind
+            + "</td></tr>"
+        )
+    miss_html = "".join(
+        "<li><a href='"
+        + html.escape(m["link"], quote=True)
+        + "'>"
+        + html.escape(m["title"][:110])
+        + "</a></li>"
+        for m in missing[:40]
+    )
+    table = (
+        "<p>No pin changes this run. Grok and the gazetteer agree, or Grok did not run.</p>"
+        if not rows_html
+        else "<table><thead><tr><th>Hazard</th><th>Headline</th><th>Gazetteer</th><th>Grok</th><th></th></tr></thead><tbody>"
+        + "".join(rows_html)
+        + "</tbody></table>"
+    )
+    page = COMPARE_HTML
+    page = page.replace("__TODAY__", html.escape(TODAY.isoformat()))
+    page = page.replace("__WINDOW__", str(WINDOW_DAYS))
+    page = page.replace("__API__", html.escape(api_note))
+    page = page.replace("__GAZ_LOC__", str(nloc(gaz_skip)))
+    page = page.replace("__GAZ_SKIP__", str(gaz_skip))
+    page = page.replace("__GAZ_CL__", str(len(gaz_clusters)))
+    page = page.replace("__GROK_LOC__", str(nloc(grok_skip)))
+    page = page.replace("__GROK_SKIP__", str(grok_skip))
+    page = page.replace("__GROK_CL__", str(len(grok_clusters)))
+    page = page.replace("__DIFFS__", str(len(diffs)))
+    page = page.replace("__RESCUED__", str(rescued))
+    page = page.replace("__MISSING__", str(len(missing)))
+    page = page.replace("__LLM_N__", str(llm_n))
+    page = page.replace("__TABLE__", table)
+    page = page.replace("__MISS_LIST__", miss_html or "<li>None</li>")
+    path = root / "compare.html"
+    tmp = root / "compare.html.tmp"
+    tmp.write_text(page, encoding="utf-8")
+    tmp.replace(path)
+    print(f"wrote {path}")
+
+
+COMPARE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gazetteer vs Grok — disaster atlas</title>
+  <style>
+    :root {
+      --ink: #efe6d6; --muted: #9b917f; --paper: #101218;
+      --panel: #161922; --line: #323848; --accent: #d4b07a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink);
+      font-family: Georgia, "Iowan Old Style", Palatino, serif; padding: 28px 22px 60px; }
+    a { color: var(--accent); }
+    h1 { font-size: 1.4rem; font-weight: 600; margin: 0 0 6px; }
+    .sub { color: var(--muted); font-size: .9rem; line-height: 1.5; max-width: 42em; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 22px 0;
+      max-width: 720px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+    .card h2 { margin: 0 0 8px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    .card p { margin: 0; font-size: 1.05rem; }
+    .num { color: var(--accent); font-variant-numeric: tabular-nums; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; margin-top: 8px; }
+    th, td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+    ul { padding-left: 1.1em; color: var(--muted); font-size: .88rem; max-width: 52em; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <p class="sub"><a href="./">← map</a></p>
+  <h1>Gazetteer vs Grok</h1>
+  <p class="sub">Same __WINDOW__-day headlines, two pin methods. Gazetteer is the word list. Grok is a proof of concept with a daily headline cap, misses first. __TODAY__. API: __API__. Asked Grok on __LLM_N__ headlines.</p>
+  <div class="stats">
+    <div class="card">
+      <h2>Without API</h2>
+      <p><span class="num">__GAZ_LOC__</span> located · __GAZ_SKIP__ no place · __GAZ_CL__ clusters</p>
+    </div>
+    <div class="card">
+      <h2>With API</h2>
+      <p><span class="num">__GROK_LOC__</span> located · __GROK_SKIP__ no place · __GROK_CL__ clusters</p>
+    </div>
+    <div class="card">
+      <h2>Pins Grok changed</h2>
+      <p><span class="num">__DIFFS__</span> headlines · __RESCUED__ had no gazetteer pin</p>
+    </div>
+    <div class="card">
+      <h2>Still unpinned</h2>
+      <p><span class="num">__MISSING__</span> — not in the gazetteer, so Grok names cannot drop a pin</p>
+    </div>
+  </div>
+  <h2>Where they disagree</h2>
+  __TABLE__
+  <h2>Still no pin</h2>
+  <ul>__MISS_LIST__</ul>
+</body>
+</html>
+"""
+
+
 HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1188,7 +1550,8 @@ HTML = """<!DOCTYPE html>
     }
     .row { display: flex; gap: 8px; margin-top: 10px; }
     .row button { cursor: pointer; }
-    .row button:hover { border-color: var(--accent); color: var(--accent); }
+    .row button:hover, .row button.on { border-color: var(--accent); color: var(--accent); }
+    .panel a { color: var(--accent); }
     .count { color: var(--accent); font-variant-numeric: tabular-nums; }
     .leaflet-popup-content-wrapper {
       background: #1a1d27; color: var(--ink); border-radius: 12px;
@@ -1214,7 +1577,12 @@ HTML = """<!DOCTYPE html>
   <div id="map"></div>
   <aside class="panel">
     <h1>Disaster atlas</h1>
-    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms, industrial accidents. Last __WINDOW__ days. Politics and explainers stay off.</p>
+    <p class="sub"><span class="count" id="count"></span> things happening now: fires, floods, quakes, storms, industrial accidents. Last __WINDOW__ days. Politics and explainers stay off. <a href="compare.html">gazetteer vs Grok</a></p>
+    <label>Pins</label>
+    <div class="row">
+      <button type="button" id="modeGrok" class="on">Grok</button>
+      <button type="button" id="modeGaz">Gazetteer</button>
+    </div>
     <label for="hazard">Hazard</label>
     <select id="hazard"></select>
     <label for="region">Region</label>
@@ -1231,7 +1599,9 @@ HTML = """<!DOCTYPE html>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const TODAY = __TODAY__;
-    const CLUSTERS = __CLUSTERS__;
+    const GROK = __GROK__;
+    const GAZ = __GAZ__;
+    let CLUSTERS = GROK;
     const HAZARD_COLOR = __HAZARD_COLOR__;
     const map = L.map("map", { zoomControl: true, minZoom: 2 }).setView([20, 15], 2);
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
@@ -1239,16 +1609,22 @@ HTML = """<!DOCTYPE html>
       maxZoom: 19
     }).addTo(map);
     const layer = L.layerGroup().addTo(map);
-    const hazards = ["all"].concat([...new Set(CLUSTERS.map(c => c.hazard))].sort());
     const hazardSel = document.getElementById("hazard");
-    hazardSel.innerHTML = hazards.map(h => '<option value="' + h + '">' + (h === "all" ? "All hazards" : h) + "</option>").join("");
-    const regions = ["all"].concat([...new Set(CLUSTERS.map(c => c.region))].sort());
     const regionSel = document.getElementById("region");
-    regionSel.innerHTML = regions.map(r => '<option value="' + r + '">' + (r === "all" ? "All regions" : r) + "</option>").join("");
     const placeSel = document.getElementById("place");
-    document.getElementById("legend").innerHTML = Object.keys(HAZARD_COLOR).filter(h => CLUSTERS.some(c => c.hazard === h)).map(h =>
-      '<span><i class="swatch" style="background:' + HAZARD_COLOR[h] + '"></i>' + h + "</span>"
-    ).join("");
+    function fillFilters() {
+      const hazards = ["all"].concat([...new Set(CLUSTERS.map(c => c.hazard))].sort());
+      const keepH = hazardSel.value || "all";
+      hazardSel.innerHTML = hazards.map(h => '<option value="' + h + '">' + (h === "all" ? "All hazards" : h) + "</option>").join("");
+      if (hazards.indexOf(keepH) !== -1) hazardSel.value = keepH;
+      const regions = ["all"].concat([...new Set(CLUSTERS.map(c => c.region))].sort());
+      const keepR = regionSel.value || "all";
+      regionSel.innerHTML = regions.map(r => '<option value="' + r + '">' + (r === "all" ? "All regions" : r) + "</option>").join("");
+      if (regions.indexOf(keepR) !== -1) regionSel.value = keepR;
+      document.getElementById("legend").innerHTML = Object.keys(HAZARD_COLOR).filter(h => CLUSTERS.some(c => c.hazard === h)).map(h =>
+        '<span><i class="swatch" style="background:' + HAZARD_COLOR[h] + '"></i>' + h + "</span>"
+      ).join("");
+    }
     function filtered() {
       const hazard = hazardSel.value, region = regionSel.value, place = placeSel.value;
       return CLUSTERS.filter(c => {
@@ -1293,6 +1669,17 @@ HTML = """<!DOCTYPE html>
     document.getElementById("world").onclick = function () { map.setView([20, 15], 2); };
     document.getElementById("asia").onclick = function () { map.setView([28, 90], 4); };
     document.getElementById("americas").onclick = function () { map.setView([15, -80], 3); };
+    function setMode(which) {
+      CLUSTERS = which === "gaz" ? GAZ : GROK;
+      document.getElementById("modeGrok").classList.toggle("on", which !== "gaz");
+      document.getElementById("modeGaz").classList.toggle("on", which === "gaz");
+      fillFilters();
+      placesFor();
+      render();
+    }
+    document.getElementById("modeGrok").onclick = function () { setMode("grok"); };
+    document.getElementById("modeGaz").onclick = function () { setMode("gaz"); };
+    fillFilters();
     placesFor();
     render();
     if (CLUSTERS.length) {
@@ -1305,8 +1692,14 @@ HTML = """<!DOCTYPE html>
 
 
 def main() -> None:
-    load_dotenv()
-    print(f"today UTC {TODAY.isoformat()}")
+    global XAI_MODEL
+    src = load_dotenv()
+    XAI_MODEL = os.environ.get("XAI_MODEL", XAI_MODEL)
+    print(f"today UTC {TODAY.isoformat()}", flush=True)
+    print(
+        f"xai key loaded={bool(xai_key())} source={src} model={XAI_MODEL}",
+        flush=True,
+    )
     articles = []
     for name, url in FEEDS:
         print(f"fetch {name}")
@@ -1344,85 +1737,106 @@ def main() -> None:
             if not is_coarse(p, hazard=a.get("hazard"))
             or (tech and p["name"] in CAPITALS and p["name"] not in AMBIGUOUS_CAPITALS)
         ]
-        rows.append({"article": a, "extra": extra, "places": places})
+        rows.append({
+            "article": a,
+            "extra": extra,
+            "places": places,
+            "gazetteer": list(places),
+        })
 
     llm_n = 0
+    want = sorted(
+        rows,
+        key=lambda row: (
+            0 if not row["places"] else min(place_grain(p["name"]) for p in row["places"]),
+            row["article"]["title"],
+        ),
+    )
+    already = xai_daily_used() if xai_key() else 0
+    if xai_key() and XAI_DAILY_MAX > 0:
+        room = max(0, XAI_DAILY_MAX - already)
+        want = want[:room]
     if not xai_key() and not ollama_on():
-        print("llm off (no XAI_API_KEY)")
+        print("llm off (no XAI_API_KEY)", flush=True)
+    elif xai_key() and XAI_DAILY_MAX > 0 and already >= XAI_DAILY_MAX:
+        print(
+            f"llm skip: daily cap {XAI_DAILY_MAX} already used {already} UTC {TODAY.isoformat()}",
+            flush=True,
+        )
+        want = []
+    elif not want:
+        print("llm skip: no disasters", flush=True)
     else:
         who = f"xai {XAI_MODEL}" if xai_key() else f"ollama {OLLAMA_MODEL}"
-        print(f"llm extract places via {who} on {len(rows)} disasters")
-        for row in rows:
-            a = row["article"]
-            llm_n += 1
-            names = llm_extract(a["title"], a["summary"], row["extra"])
-            if not names:
-                continue
-            before = [p["name"] for p in row["places"]]
-            row["places"] = pin_from_names(names, a, row["places"])
-            after = [p["name"] for p in row["places"]]
-            if after != before:
-                print(f"  llm {a['title'][:42]:42} {names} -> {after}")
+        print(
+            f"llm extract places via {who} on {len(want)}/{len(rows)} "
+            f"(daily cap {XAI_DAILY_MAX}, already {already}, misses first)",
+            flush=True,
+        )
+        if xai_key():
+            n = max(1, XAI_BATCH)
+            for start in range(0, len(want), n):
+                if XAI_DISABLED:
+                    print(f"  xai skipped remaining {len(want) - llm_n}", flush=True)
+                    break
+                chunk = want[start:start + n]
+                got = xai_extract_batch(chunk)
+                if XAI_DISABLED:
+                    print(f"  xai skipped remaining {len(want) - llm_n}", flush=True)
+                    break
+                llm_n += len(chunk)
+                xai_daily_add(len(chunk))
+                for i, row in enumerate(chunk):
+                    names = got.get(i) or []
+                    if not names:
+                        continue
+                    a = row["article"]
+                    before = [p["name"] for p in row["places"]]
+                    row["places"] = pin_from_names(names, a, row["places"])
+                    after = [p["name"] for p in row["places"]]
+                    if after != before:
+                        print(f"  llm {a['title'][:42]:42} {names} -> {after}")
+        else:
+            for row in want:
+                a = row["article"]
+                llm_n += 1
+                names = llm_extract(a["title"], a["summary"], row["extra"])
+                if not names:
+                    continue
+                before = [p["name"] for p in row["places"]]
+                row["places"] = pin_from_names(names, a, row["places"])
+                after = [p["name"] for p in row["places"]]
+                if after != before:
+                    print(f"  llm {a['title'][:42]:42} {names} -> {after}")
         print(f"llm place-extract {llm_n}")
 
-    located = []
-    skipped = 0
+    grok_clusters, grok_skip = materialize(rows, "places")
+    gaz_clusters, gaz_skip = materialize(rows, "gazetteer")
     for row in rows:
         a = row["article"]
         places = row["places"]
-        extra = row["extra"]
         if not places:
-            skipped += 1
             print(f"  no place | {a['title'][:70]}")
             continue
-        a["places"] = places
-        a["place"] = places[0]
-        names = [p["name"] for p in places]
-        a["snippet"] = mention_snippet(a["title"] + ". " + a["summary"] + " " + extra, names)
-        located.append(a)
         print(f"  {', '.join(p['name'] for p in places):28} | {a['title'][:52]}")
-    print(f"located {len(located)}, no place {skipped}")
-    print("hazards", Counter(a["hazard"] for a in located))
+    print(f"gazetteer located {len(rows) - gaz_skip}, no place {gaz_skip}, clusters {len(gaz_clusters)}")
+    print(f"grok located {len(rows) - grok_skip}, no place {grok_skip}, clusters {len(grok_clusters)}")
+    print("hazards", Counter((row["article"].get("hazard") or "") for row in rows if row["places"]))
 
-    by_place: dict[tuple[str, str], list] = defaultdict(list)
-    for a in located:
-        for p in a["places"]:
-            by_place[(p["name"], a["hazard"])].append((a, p))
-    clusters = []
-    for (_name, _hazard), pairs in by_place.items():
-        members = [a for a, _ in pairs]
-        place = pairs[0][1]
-        seen = set()
-        uniq = []
-        for m in members:
-            key = re.sub(r"\W+", "", m["title"].lower())[:80]
-            if key in seen:
-                continue
-            seen.add(key)
-            uniq.append({
-                "title": html.escape(m["title"]),
-                "link": m["link"],
-                "source": html.escape(m["source"]),
-                "today": m["today"],
-                "places": [html.escape(p["name"]) for p in m["places"]],
-                "snippet": html.escape(m.get("snippet") or ""),
-            })
-        hazards = Counter(m["hazard"] for m in members)
-        clusters.append({
-            "title": cluster_title(members),
-            "place": place["name"],
-            "lat": place["lat"],
-            "lng": place["lng"],
-            "region": place["region"],
-            "hazard": hazards.most_common(1)[0][0],
-            "articles": uniq,
-        })
-    clusters.sort(key=lambda c: (-len(c["articles"]), c["place"]))
-    print(f"clusters {len(clusters)}")
+    diffs, missing = pin_diff_rows(rows)
+    if XAI_DISABLED:
+        api_note = f"{XAI_MODEL} credits/spending limit"
+    elif not xai_key() and not ollama_on():
+        api_note = "off (no key)"
+    elif llm_n:
+        api_note = f"{XAI_MODEL if xai_key() else OLLAMA_MODEL}, {llm_n} headlines"
+    else:
+        api_note = "not called"
 
     out = HTML.replace("__TODAY__", json.dumps(TODAY.isoformat()))
     out = out.replace("__WINDOW__", str(WINDOW_DAYS))
-    out = out.replace("__CLUSTERS__", json.dumps(clusters, ensure_ascii=False))
+    out = out.replace("__GROK__", json.dumps(grok_clusters, ensure_ascii=False))
+    out = out.replace("__GAZ__", json.dumps(gaz_clusters, ensure_ascii=False))
     out = out.replace("__HAZARD_COLOR__", json.dumps(HAZARD_COLOR))
     root = Path(os.environ.get("OUT_DIR") or Path(__file__).resolve().parent)
     root.mkdir(parents=True, exist_ok=True)
@@ -1432,6 +1846,18 @@ def main() -> None:
         tmp.write_text(out, encoding="utf-8")
         tmp.replace(path)
         print(f"wrote {path}")
+    write_compare(
+        root,
+        api_note=api_note,
+        gaz_clusters=gaz_clusters,
+        gaz_skip=gaz_skip,
+        grok_clusters=grok_clusters,
+        grok_skip=grok_skip,
+        n_rows=len(rows),
+        diffs=diffs,
+        missing=missing,
+        llm_n=llm_n,
+    )
 
 
 if __name__ == "__main__":
